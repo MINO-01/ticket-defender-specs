@@ -3,7 +3,7 @@
 ## 규칙
 - 한 PR에서 하나의 계약 변화만 수행; PR당 review 가능한 변경 크기 목표(예: 200~400 LOC 중심, migration 등 예외 허용).
 - 현행 확인(파일/실제 테스트) → 변경안/ADR 승인 → test-first/contract fixture → 구현 → 통합 테스트 → 문서 업데이트.
-- OpenAPI/schema/state diagrams가 변경되면 Java DTO/Pydantic/TS 타입/SQL migration/테스트를 같은 PR에서 변경하거나 버전 공존 전략 명시.
+- OpenAPI/schema/state diagrams가 변경되면 영향받는 저장소별로 서로 연결된 PR에서 Java DTO/Pydantic/TS 타입/SQL migration/테스트를 조율하고, 호환성 및 배포 순서를 명시한다.
 - 저장소 전체를 자동 재작성하지 않는다. 데이터 손실 위험 SQL은 사람 승인.
 
 ## Stepwise backlog
@@ -62,3 +62,19 @@
 - [ ] API error code, frontend 빈 상태/에러 상태
 - [ ] 분석/모델 버전과 증거 출처/로그 redaction
 - [ ] PR reviewer가 배포/실험 재현할 명령 기록
+
+## 추가 작업 제안 (기존 TD-01~TD-19 유지)
+
+아래 항목은 모두 **PROPOSED**이며 GitHub Issue 생성이나 범위 승인 완료를 뜻하지 않는다. 세부 선행 조건과 계약 결정은 [결정 대기 목록](governance/decision-log.md)에서 추적한다.
+
+| ID | 상태 | 목적 | 기존 TD와의 관계 |
+|---|---|---|---|
+| TD-00D | PROPOSED | Specs Git·문서·계약 관리 체계 | TD-01 계약 고정 전 |
+| TD-BUG-01 | PROPOSED | 기존 매크로 감사 PDF의 `mappingScore` null 경로 수정 | TD-14 이전 결함 수정 |
+| TD-SEC-01 | PROPOSED | 인증·인가와 tenant 경계의 선행 안전 조치 | TD-09 및 TD-04 이전 검토 |
+| TD-SEC-02 | PROPOSED | 민감 로그·PDF 외부 리소스·모델 전송 정책 점검 | TD-10·TD-11·TD-14 이전 검토 |
+| TD-DATA-01 | PROPOSED | 데이터 처리 스크립트의 삭제·중복 적재 위험 분리 | TD-03·TD-04 이전 검토 |
+| TD-QA-01 | PROPOSED | FastAPI 단위·계약 테스트 기준선 마련 | TD-01·TD-02 검증 지원 |
+| TD-INGEST-01 | PROPOSED | 입력 식별자·검증·불변 배치 수집 설계 | TD-03·TD-07·TD-08 연계 |
+| TD-INT-01 | PROPOSED | Track 1·Track 2 결과 통합 및 실패 상태 계약 | TD-06·TD-11·TD-13 연계 |
+| TD-AUD-01 | PROPOSED | 검토·승인·PDF 발급의 감사 이력 | TD-13·TD-14 연계 |

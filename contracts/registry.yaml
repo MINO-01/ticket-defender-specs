@@ -1,0 +1,47 @@
+schemaVersion: 1
+contracts:
+  - contractId: track1-internal-v1
+    artifactPath: contracts/track1-internal-v1-proposal.yaml
+    artifactSha256: 0852c43eaac4bf5c4340a5a599cd0ca096be28d67b10607971774ccf1c0d8b9a
+    contractVersion: "1.0.0"
+    documentStatus: PROPOSED
+    approval: {approvedBy: null, approvedAt: null, pr: null}
+    provider:
+      repository: ticket-defender-data
+      implementationStatus: NOT_STARTED
+    consumers:
+      - repository: ticket-defender-backend
+        implementationStatus: PARTIAL
+    observedCommit:
+      ticket-defender-backend: 8b4f756b78b911deb0462aa057971891e2b506a4
+      ticket-defender-data: cb388142491cd08cc77cfd3d8e113c808a980f28
+    implementationCommit: null
+    verificationCommit: null
+    verificationScope: null
+    compatibility: NOT_VERIFIED
+    currentState: "Spring expects POST /api/v1/clusters/analyze and Louvain DTO; Python provides POST /api/v1/clusters/macro and WCC with a different DTO. The target v1 contract has not been verified across both services."
+    relatedTd: [TD-01, TD-02, TD-05, TD-06]
+    relatedPrs: []
+
+  - contractId: admin-api-v1
+    artifactPath: contracts/admin-api-v1-proposal.yaml
+    artifactSha256: ce604d4fa4f3934b2c9cd3669fbc894b40a2dcc2674faf0ab58f17d48b3e775e
+    contractVersion: "1.0.0"
+    documentStatus: PROPOSED
+    approval: {approvedBy: null, approvedAt: null, pr: null}
+    provider:
+      repository: ticket-defender-backend
+      implementationStatus: NOT_STARTED
+    consumers:
+      - repository: ticket-defender-frontend
+        implementationStatus: NOT_STARTED
+    observedCommit:
+      ticket-defender-backend: 8b4f756b78b911deb0462aa057971891e2b506a4
+      ticket-defender-frontend: null
+    implementationCommit: null
+    verificationCommit: null
+    verificationScope: null
+    compatibility: NOT_VERIFIED
+    currentState: "The target proposal describes only part of the planned admin API; existing Spring endpoints do not establish implementation of this proposal."
+    relatedTd: [TD-07, TD-08, TD-09, TD-10, TD-12, TD-13, TD-14, TD-15]
+    relatedPrs: []
