@@ -1,0 +1,127 @@
+openapi: 3.1.0
+info:
+  title: Ticket Defender Track 1 Internal Analysis Contract (PROPOSAL)
+  version: 1.0.0
+  description: >-
+    Target contract matching the existing Spring DTO/adapter. This is NOT
+    the current Python implementation; Python currently exposes /clusters/macro
+    with WCC and incompatible DTOs. Use only in a single trusted tenant scope
+    until authenticated multitenant boundaries have been implemented.
+servers:
+  - url: http://localhost:8000
+paths:
+  /api/v1/clusters/analyze:
+    post:
+      operationId: analyzeMacroClusters
+      summary: Analyze a validated ticket batch using Louvain
+      security:
+        - internalServiceAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MacroAnalysisRequest'
+      responses:
+        '200':
+          description: Algorithm completed (empty clusters allowed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MacroAnalysisResponse'
+        '401':
+          description: Missing internal service authentication
+        '422':
+          description: Invalid request; no algorithm was run
+        '500':
+          description: Analysis failure; not interpreted as zero findings
+        '503':
+          description: GDS/Neo4j resource unavailable
+components:
+  securitySchemes:
+    internalServiceAuth:
+      type: http
+      scheme: bearer
+      description: Infrastructure-issued internal service credential; proposed, not yet verified
+  schemas:
+    MacroAnalysisRequest:
+      type: object
+      additionalProperties: false
+      required: [requestId, tickets]
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        tickets:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/TicketInput'
+    TicketInput:
+      type: object
+      additionalProperties: false
+      required: [accountId, reservationNo, eventId]
+      anyOf:
+        - required: [paymentHash]
+          properties: {paymentHash: {$ref: '#/components/schemas/HashToken'}}
+        - required: [addressHash]
+          properties: {addressHash: {$ref: '#/components/schemas/HashToken'}}
+        - required: [deviceIdHash]
+          properties: {deviceIdHash: {$ref: '#/components/schemas/HashToken'}}
+        - required: [ipHash]
+          properties: {ipHash: {$ref: '#/components/schemas/HashToken'}}
+      description: >-
+        At least one signal must be non-null; enforce this with Pydantic model
+        validation as anyOf alone does not enforce non-null in every validator.
+      properties:
+        accountId: {type: string, minLength: 1, maxLength: 128}
+        reservationNo: {type: string, minLength: 1, maxLength: 128}
+        eventId: {type: string, minLength: 1, maxLength: 128}
+        paymentHash: {oneOf: [{'$ref': '#/components/schemas/HashToken'}, {type: 'null'}]}
+        addressHash: {oneOf: [{'$ref': '#/components/schemas/HashToken'}, {type: 'null'}]}
+        deviceIdHash: {oneOf: [{'$ref': '#/components/schemas/HashToken'}, {type: 'null'}]}
+        ipHash: {oneOf: [{'$ref': '#/components/schemas/HashToken'}, {type: 'null'}]}
+    HashToken:
+      type: string
+      pattern: '^[0-9a-f]{64}$'
+      description: Deterministic tenant-and-signal-type-specific HMAC-SHA256 token
+    MacroAnalysisResponse:
+      type: object
+      additionalProperties: false
+      required: [requestId, status, algorithm, algorithmVersion, analyzedAt, clusters]
+      properties:
+        requestId: {type: string, format: uuid}
+        status: {type: string, const: COMPLETED}
+        algorithm: {type: string, const: LOUVAIN}
+        algorithmVersion: {type: string, minLength: 1}
+        analyzedAt: {type: string, format: date-time}
+        clusters:
+          type: array
+          items: {'$ref': '#/components/schemas/MacroCluster'}
+    MacroCluster:
+      type: object
+      additionalProperties: false
+      required: [clusterId, members, paymentHashes, addressHashes, deviceIdHashes, ipHashes, riskScore]
+      properties:
+        clusterId: {type: string, minLength: 1}
+        members:
+          type: array
+          minItems: 2
+          items: {'$ref': '#/components/schemas/ClusterMember'}
+        paymentHashes: {type: array, items: {'$ref': '#/components/schemas/HashToken'}}
+        addressHashes: {type: array, items: {'$ref': '#/components/schemas/HashToken'}}
+        deviceIdHashes: {type: array, items: {'$ref': '#/components/schemas/HashToken'}}
+        ipHashes: {type: array, items: {'$ref': '#/components/schemas/HashToken'}}
+        riskScore:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Investigation priority; NOT probability of illegality
+    ClusterMember:
+      type: object
+      additionalProperties: false
+      required: [accountId, reservationNo, eventId]
+      properties:
+        accountId: {type: string, minLength: 1}
+        reservationNo: {type: string, minLength: 1}
+        eventId: {type: string, minLength: 1}

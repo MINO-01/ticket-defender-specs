@@ -1,0 +1,271 @@
+openapi: 3.1.0
+info:
+  title: Ticket Defender Spring Admin API (PROPOSAL)
+  version: 1.0.0
+  description: >-
+    Proposed public-facing Spring API. These paths are not claimed to exist
+    in the current repository. Tenant scoping is resolved server-side from
+    authenticated membership and must be checked on every resource.
+servers: [{url: http://localhost:8080}]
+security: [{bearerAuth: []}]
+paths:
+  /api/v1/analysis-jobs:
+    post:
+      operationId: createAnalysisJob
+      summary: Create asynchronous analysis job
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateJobRequest'}
+      responses:
+        '202':
+          description: Job accepted
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AnalysisJob'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+  /api/v1/analysis-jobs/{jobId}:
+    get:
+      operationId: getAnalysisJob
+      parameters: [{$ref: '#/components/parameters/JobId'}]
+      responses:
+        '200':
+          description: Current technical execution state (not case determination)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AnalysisJob'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /api/v1/analysis-jobs/{jobId}/retry:
+    post:
+      operationId: retryAnalysisJob
+      parameters: [{$ref: '#/components/parameters/JobId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties: {reason: {type: string, minLength: 3, maxLength: 1000}}
+      responses:
+        '202':
+          description: Retry accepted
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AnalysisJob'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /api/v1/cases:
+    post:
+      operationId: createCase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateCaseRequest'}
+      responses:
+        '201':
+          description: Case created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Case'}
+        '403': {$ref: '#/components/responses/Problem'}
+    get:
+      operationId: listCases
+      parameters:
+        - in: query
+          name: page
+          schema: {type: integer, minimum: 0, default: 0}
+        - in: query
+          name: pageSize
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      responses:
+        '200':
+          description: Tenant-scoped case page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, page, pageSize]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/Case'}}
+                  page: {type: integer}
+                  pageSize: {type: integer}
+  /api/v1/cases/{caseId}:
+    get:
+      operationId: getCase
+      parameters: [{$ref: '#/components/parameters/CaseId'}]
+      responses:
+        '200':
+          description: Case details with allowed actions
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Case'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /api/v1/cases/{caseId}/transitions:
+    post:
+      operationId: transitionCase
+      parameters: [{$ref: '#/components/parameters/CaseId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TransitionCaseRequest'}
+      responses:
+        '200':
+          description: Transition applied
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Case'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /api/v1/fan-reports:
+    post:
+      operationId: createFanReport
+      summary: Receive image with owner-checked report details
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [eventId, image]
+              properties:
+                eventId: {type: string, format: uuid}
+                description: {type: string, maxLength: 2000}
+                image: {type: string, format: binary}
+      responses:
+        '201':
+          description: Report recorded (not analyzed yet)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reportId, evidenceId]
+                properties:
+                  reportId: {type: string, format: uuid}
+                  evidenceId: {type: string, format: uuid}
+        '413': {$ref: '#/components/responses/Problem'}
+        '415': {$ref: '#/components/responses/Problem'}
+  /api/v1/report-versions/{reportVersionId}/approve:
+    post:
+      operationId: approveReportVersion
+      parameters: [{$ref: '#/components/parameters/ReportVersionId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedVersion, reason]
+              properties:
+                expectedVersion: {type: integer, minimum: 0}
+                reason: {type: string, minLength: 3}
+      responses:
+        '200':
+          description: Report approval recorded
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Proposed only; exact enterprise auth/session design to be approved
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema: {type: string, minLength: 8, maxLength: 128}
+    JobId:
+      in: path
+      name: jobId
+      required: true
+      schema: {type: string, format: uuid}
+    CaseId:
+      in: path
+      name: caseId
+      required: true
+      schema: {type: string, format: uuid}
+    ReportVersionId:
+      in: path
+      name: reportVersionId
+      required: true
+      schema: {type: string, format: uuid}
+  responses:
+    Problem:
+      description: Operation was not permitted or failed
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code, requestId]
+      properties:
+        type: {type: string, format: uri-reference}
+        title: {type: string}
+        status: {type: integer}
+        code: {type: string}
+        detail: {type: string}
+        requestId: {type: string}
+        violations: {type: array, items: {type: object}}
+    CreateJobRequest:
+      type: object
+      additionalProperties: false
+      required: [batchId, algorithm]
+      properties:
+        batchId: {type: string, format: uuid}
+        algorithm: {type: string, const: LOUVAIN}
+    AnalysisJob:
+      type: object
+      additionalProperties: false
+      required: [jobId, status, attempt, createdAt]
+      properties:
+        jobId: {type: string, format: uuid}
+        status:
+          type: string
+          enum: [QUEUED, RUNNING, RETRY_WAIT, COMPLETED, FAILED, CANCELLED]
+        attempt: {type: integer, minimum: 0}
+        failureCode: {type: [string, 'null']}
+        createdAt: {type: string, format: date-time}
+        completedAt: {type: [string, 'null'], format: date-time}
+    CreateCaseRequest:
+      type: object
+      additionalProperties: false
+      required: [eventId, type]
+      properties:
+        eventId: {type: string, format: uuid}
+        type: {type: string, enum: [GRAPH_CLUSTER, FAN_REPORT, COMBINED]}
+        findingIds: {type: array, items: {type: string, format: uuid}}
+        evidenceIds: {type: array, items: {type: string, format: uuid}}
+        reason: {type: string}
+    Case:
+      type: object
+      additionalProperties: false
+      required: [caseId, eventId, type, status, version, allowedActions]
+      properties:
+        caseId: {type: string, format: uuid}
+        eventId: {type: string, format: uuid}
+        type: {type: string, enum: [GRAPH_CLUSTER, FAN_REPORT, COMBINED]}
+        status:
+          type: string
+          enum: [OPEN, TRIAGED, IN_REVIEW, NEEDS_EVIDENCE, READY_FOR_APPROVAL, APPROVED_FOR_REPORT, DISMISSED, CLOSED]
+        version: {type: integer, minimum: 0}
+        allowedActions: {type: array, items: {type: string}}
+    TransitionCaseRequest:
+      type: object
+      additionalProperties: false
+      required: [toStatus, expectedVersion, reason]
+      properties:
+        toStatus:
+          type: string
+          enum: [TRIAGED, IN_REVIEW, NEEDS_EVIDENCE, READY_FOR_APPROVAL, APPROVED_FOR_REPORT, DISMISSED, CLOSED]
+        expectedVersion: {type: integer, minimum: 0}
+        reason: {type: string, minLength: 3, maxLength: 2000}

@@ -1,0 +1,12 @@
+stateDiagram-v2
+  [*] --> QUEUED
+  QUEUED --> RUNNING
+  QUEUED --> CANCELLED
+  RUNNING --> COMPLETED
+  RUNNING --> RETRY_WAIT
+  RUNNING --> FAILED
+  RETRY_WAIT --> QUEUED
+  RETRY_WAIT --> FAILED
+  FAILED --> QUEUED: explicit retry (new attempt)
+  COMPLETED --> [*]
+  CANCELLED --> [*]
