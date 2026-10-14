@@ -1,0 +1,31 @@
+schemaVersion: 1
+documents:
+  - {documentId: README, path: README.md, purpose: "문서 탐색과 상태 안내", documentStatus: DRAFT, ownerRole: Tech Lead, relatedTd: [TD-00D], approval: &unapproved {approvedBy: null, approvedAt: null, pr: null}}
+  - {documentId: AGENTS, path: AGENTS.md, purpose: "Specs 작업 원칙", documentStatus: DRAFT, ownerRole: Tech Lead, relatedTd: [TD-00D], approval: *unapproved}
+  - {documentId: SPEC-00, path: 00_시작하기_현행코드감사와_결정사항.md, purpose: "과거 부분 코드 감사와 제안", documentStatus: DRAFT, ownerRole: Tech Lead, relatedTd: [TD-00], approval: *unapproved}
+  - {documentId: SPEC-01, path: 01_PRD_제품요구사항.md, purpose: "제품 요구사항", documentStatus: PROPOSED, ownerRole: PM, relatedTd: [TD-01], approval: *unapproved}
+  - {documentId: SPEC-02, path: 02_기능명세서.md, purpose: "기능 요구사항", documentStatus: PROPOSED, ownerRole: PM/Engineering, relatedTd: [TD-01], approval: *unapproved}
+  - {documentId: SPEC-03, path: 03_역할권한정의.md, purpose: "역할과 권한", documentStatus: PROPOSED, ownerRole: Security/Backend, relatedTd: [TD-09], approval: *unapproved}
+  - {documentId: SPEC-04, path: 04_사용자시나리오_업무흐름_상태전이.md, purpose: "업무 흐름과 상태", documentStatus: PROPOSED, ownerRole: PM/Backend, relatedTd: [TD-08, TD-13], approval: *unapproved}
+  - {documentId: SPEC-05, path: 05_시스템아키텍처_워크비동기.md, purpose: "시스템 아키텍처와 작업 흐름", documentStatus: PROPOSED, ownerRole: Architect, relatedTd: [TD-08], approval: *unapproved}
+  - {documentId: SPEC-06, path: 06_ERD_데이터사전_MySQL_Neo4j.md, purpose: "목표 데이터 모델", documentStatus: PROPOSED, ownerRole: Backend/Data, relatedTd: [TD-03, TD-07], approval: *unapproved}
+  - {documentId: SPEC-07, path: 07_API명세_외부내부_계약.md, purpose: "목표 API와 오류 규약", documentStatus: PROPOSED, ownerRole: Backend/Data, relatedTd: [TD-01], approval: *unapproved}
+  - {documentId: SPEC-08, path: 08_데이터수집_토큰화_중복.md, purpose: "수집과 토큰화", documentStatus: PROPOSED, ownerRole: Security/Data, relatedTd: [TD-INGEST-01], approval: *unapproved}
+  - {documentId: SPEC-09, path: 09_탐지알고리즘_평가.md, purpose: "탐지와 평가", documentStatus: PROPOSED, ownerRole: Data/Research, relatedTd: [TD-05], approval: *unapproved}
+  - {documentId: SPEC-10, path: 10_IA_화면상세_React.md, purpose: "관리자 화면 구조", documentStatus: PROPOSED, ownerRole: Frontend/PM, relatedTd: [TD-15, TD-16], approval: *unapproved}
+  - {documentId: SPEC-11, path: 11_보안_개인정보_위협모델.md, purpose: "보안과 개인정보 위협", documentStatus: PROPOSED, ownerRole: Security, relatedTd: [TD-SEC-01, TD-SEC-02], approval: *unapproved}
+  - {documentId: SPEC-12, path: 12_증거관리_PDF.md, purpose: "증거와 PDF 발급", documentStatus: PROPOSED, ownerRole: Backend/PM, relatedTd: [TD-14], approval: *unapproved}
+  - {documentId: SPEC-13, path: 13_UIUX_디자인시스템_Figma.md, purpose: "UI 디자인 기준", documentStatus: PROPOSED, ownerRole: Designer/Frontend, relatedTd: [TD-15], approval: *unapproved}
+  - {documentId: SPEC-14, path: 14_테스트_운영_릴리즈.md, purpose: "검증·운영·릴리즈 기준", documentStatus: PROPOSED, ownerRole: QA/Infra, relatedTd: [TD-QA-01], approval: *unapproved}
+  - {documentId: SPEC-15, path: 15_개발순서_Codex_이슈백로그.md, purpose: "TD 작업 계획과 제안", documentStatus: PROPOSED, ownerRole: Tech Lead, relatedTd: [TD-00D], approval: *unapproved}
+  - {documentId: SPEC-ALL, path: ALL_통합_명세서.md, purpose: "원본 00~15의 검색용 파생본", documentStatus: DRAFT, ownerRole: Tech Lead, relatedTd: [TD-00D], approval: *unapproved}
+  - {documentId: CONTRACT-TRACK1, path: contracts/track1-internal-v1-proposal.yaml, purpose: "Track 1 내부 API 제안", documentStatus: PROPOSED, ownerRole: Backend/Data, relatedTd: [TD-01], approval: *unapproved}
+  - {documentId: CONTRACT-ADMIN, path: contracts/admin-api-v1-proposal.yaml, purpose: "관리자 API 제안", documentStatus: PROPOSED, ownerRole: Backend/Frontend, relatedTd: [TD-01, TD-15], approval: *unapproved}
+  - {documentId: DIAGRAM-JOB, path: contracts/analysis-job.mmd, purpose: "작업 상태도 제안", documentStatus: PROPOSED, ownerRole: Backend, relatedTd: [TD-08], approval: *unapproved}
+  - {documentId: DIAGRAM-CASE, path: contracts/case-workflow.mmd, purpose: "사건 상태도 제안", documentStatus: PROPOSED, ownerRole: Backend/PM, relatedTd: [TD-13], approval: *unapproved}
+  - {documentId: GOVERNANCE-POLICY, path: governance/spec-management.md, purpose: "명세·계약·PR 관리 정책", documentStatus: DRAFT, ownerRole: Tech Lead, relatedTd: [TD-00D], approval: *unapproved}
+  - {documentId: GOVERNANCE-REGISTER, path: governance/document-register.yaml, purpose: "실제 문서 인벤토리", documentStatus: DRAFT, ownerRole: Tech Lead, relatedTd: [TD-00D], approval: *unapproved}
+  - {documentId: GOVERNANCE-DECISIONS, path: governance/decision-log.md, purpose: "미결정 사항과 대안", documentStatus: DRAFT, ownerRole: Tech Lead, relatedTd: [TD-00D], approval: *unapproved}
+  - {documentId: GOVERNANCE-BASELINE, path: governance/baseline.md, purpose: "특정 SHA의 검증 기록", documentStatus: DRAFT, ownerRole: QA, relatedTd: [TD-00D], approval: *unapproved}
+  - {documentId: CONTRACT-REGISTER, path: contracts/registry.yaml, purpose: "계약 revision과 구현 상태", documentStatus: DRAFT, ownerRole: Tech Lead, relatedTd: [TD-00D], approval: *unapproved}
+  - {documentId: PR-TEMPLATE, path: .github/PULL_REQUEST_TEMPLATE.md, purpose: "Specs PR 검토 항목", documentStatus: DRAFT, ownerRole: Tech Lead, relatedTd: [TD-00D], approval: *unapproved}

@@ -1,6 +1,8 @@
 # 07. REST API/DTO/오류 규약 — v1 제안
 
-> 기존 **실제 내부 Spring** `POST /api/v1/clusters/analyze`와 응답 DTO 유지가 최우선. Python 실제 `/api/v1/clusters/macro`는 미정렬 구현이므로 아래 INTERNAL target은 아직 작동한다고 주장하지 않는다. 상세 예시는 `contracts/openapi-proposal.yaml` 참조.
+> Spring의 FastAPI 호출부가 **소비자로서 기대하는 내부 경로**는 `POST /api/v1/clusters/analyze`다. Python이 현재 제공하는 `/api/v1/clusters/macro` 및 WCC 결과와는 일치하지 않는다. 목표 내부 계약은 [Track 1 proposal](contracts/track1-internal-v1-proposal.yaml), Spring이 React에 제공할 목표 관리자 API는 [관리자 API proposal](contracts/admin-api-v1-proposal.yaml)을 각각 참조한다. 두 계약 모두 아직 제안 상태이며 현행 동작이나 승인 완료를 뜻하지 않는다.
+
+> Spring의 기존 외부 진입점 `/api/v1/audits/analyze`와 Spring → FastAPI 내부 호출 URL, 아래 목표 관리자 API URL은 서로 다른 인터페이스다. 계약 승인과 실제 구현·검증 상태는 [계약 레지스트리](contracts/registry.yaml)에서 별도로 추적한다.
 
 ## 관리자 API — Spring (모두 인증 필요)
 | Method | Path | Request | 2xx | 역할 | 주의 |

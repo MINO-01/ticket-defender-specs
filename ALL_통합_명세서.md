@@ -8,6 +8,8 @@
 
 > 문서 성격: 공개된 `main`의 **확인 가능한 소스 파일만** 근거로 작성한 부분 코드 감사 + 앞으로의 설계 제안. 저장소 전체 트리 열람 및 빌드 실행은 네트워크 제한으로 수행하지 못함. 따라서 '미구현'의 단정 대신 '열람한 범위에서 미확인'으로 표기한다.
 
+> 상태 해설: 아래 `[결정]`은 당시의 권장 설계이며 이 저장소의 공식 `APPROVED` 기록을 뜻하지 않는다. `[완료]`은 충족해야 할 인수 기준으로, 실제 작업 완료 기록이 아니다. 특정 HEAD에서 확인된 코드·테스트 결과와 검증되지 않은 범위는 [기준선 기록](governance/baseline.md)을 참조한다.
+
 ## 점검한 실제 파일
 
 | 저장소 | 실제 열람 파일 | 확인 내용 |
@@ -395,7 +397,9 @@ erDiagram
 
 # 07. REST API/DTO/오류 규약 — v1 제안
 
-> 기존 **실제 내부 Spring** `POST /api/v1/clusters/analyze`와 응답 DTO 유지가 최우선. Python 실제 `/api/v1/clusters/macro`는 미정렬 구현이므로 아래 INTERNAL target은 아직 작동한다고 주장하지 않는다. 상세 예시는 `contracts/openapi-proposal.yaml` 참조.
+> Spring의 FastAPI 호출부가 **소비자로서 기대하는 내부 경로**는 `POST /api/v1/clusters/analyze`다. Python이 현재 제공하는 `/api/v1/clusters/macro` 및 WCC 결과와는 일치하지 않는다. 목표 내부 계약은 [Track 1 proposal](contracts/track1-internal-v1-proposal.yaml), Spring이 React에 제공할 목표 관리자 API는 [관리자 API proposal](contracts/admin-api-v1-proposal.yaml)을 각각 참조한다. 두 계약 모두 아직 제안 상태이며 현행 동작이나 승인 완료를 뜻하지 않는다.
+
+> Spring의 기존 외부 진입점 `/api/v1/audits/analyze`와 Spring → FastAPI 내부 호출 URL, 아래 목표 관리자 API URL은 서로 다른 인터페이스다. 계약 승인과 실제 구현·검증 상태는 [계약 레지스트리](contracts/registry.yaml)에서 별도로 추적한다.
 
 ## 관리자 API — Spring (모두 인증 필요)
 | Method | Path | Request | 2xx | 역할 | 주의 |
@@ -812,7 +816,7 @@ Figma Button action spec은 `ui-actions.csv`(권한·상태)로 export하여 개
 ## 규칙
 - 한 PR에서 하나의 계약 변화만 수행; PR당 review 가능한 변경 크기 목표(예: 200~400 LOC 중심, migration 등 예외 허용).
 - 현행 확인(파일/실제 테스트) → 변경안/ADR 승인 → test-first/contract fixture → 구현 → 통합 테스트 → 문서 업데이트.
-- OpenAPI/schema/state diagrams가 변경되면 Java DTO/Pydantic/TS 타입/SQL migration/테스트를 같은 PR에서 변경하거나 버전 공존 전략 명시.
+- OpenAPI/schema/state diagrams가 변경되면 영향받는 저장소별로 서로 연결된 PR에서 Java DTO/Pydantic/TS 타입/SQL migration/테스트를 조율하고, 호환성 및 배포 순서를 명시한다.
 - 저장소 전체를 자동 재작성하지 않는다. 데이터 손실 위험 SQL은 사람 승인.
 
 ## Stepwise backlog
@@ -872,3 +876,18 @@ Figma Button action spec은 `ui-actions.csv`(권한·상태)로 export하여 개
 - [ ] 분석/모델 버전과 증거 출처/로그 redaction
 - [ ] PR reviewer가 배포/실험 재현할 명령 기록
 
+## 추가 작업 제안 (기존 TD-01~TD-19 유지)
+
+아래 항목은 모두 **PROPOSED**이며 GitHub Issue 생성이나 범위 승인 완료를 뜻하지 않는다. 세부 선행 조건과 계약 결정은 [결정 대기 목록](governance/decision-log.md)에서 추적한다.
+
+| ID | 상태 | 목적 | 기존 TD와의 관계 |
+|---|---|---|---|
+| TD-00D | PROPOSED | Specs Git·문서·계약 관리 체계 | TD-01 계약 고정 전 |
+| TD-BUG-01 | PROPOSED | 기존 매크로 감사 PDF의 `mappingScore` null 경로 수정 | TD-14 이전 결함 수정 |
+| TD-SEC-01 | PROPOSED | 인증·인가와 tenant 경계의 선행 안전 조치 | TD-09 및 TD-04 이전 검토 |
+| TD-SEC-02 | PROPOSED | 민감 로그·PDF 외부 리소스·모델 전송 정책 점검 | TD-10·TD-11·TD-14 이전 검토 |
+| TD-DATA-01 | PROPOSED | 데이터 처리 스크립트의 삭제·중복 적재 위험 분리 | TD-03·TD-04 이전 검토 |
+| TD-QA-01 | PROPOSED | FastAPI 단위·계약 테스트 기준선 마련 | TD-01·TD-02 검증 지원 |
+| TD-INGEST-01 | PROPOSED | 입력 식별자·검증·불변 배치 수집 설계 | TD-03·TD-07·TD-08 연계 |
+| TD-INT-01 | PROPOSED | Track 1·Track 2 결과 통합 및 실패 상태 계약 | TD-06·TD-11·TD-13 연계 |
+| TD-AUD-01 | PROPOSED | 검토·승인·PDF 발급의 감사 이력 | TD-13·TD-14 연계 |
