@@ -12,7 +12,7 @@
 |---|---|---|---|
 | POST | /api/v1/analysis-jobs | `batchId,algorithm` → 202 AnalysisJob | 기존 관리자 초안; Idempotency-Key |
 | GET/POST | /api/v1/analysis-jobs/{jobId}, /api/v1/analysis-jobs/{jobId}/retry | 기술 작업 조회/재시도 | 실패 ≠ 완료 0건 |
-| POST | /api/v1/fan-reports | multipart `eventId,image` → 201 `reportId,evidenceId` | 기존 응답 필드 유지. `reportId` 값은 Case의 `fanReportIds`에 사용하는 제보 ID이며 `evidenceId`는 소속 파일 ID. 원본 비공개 |
+| POST | /api/v1/fan-reports | multipart `eventId,image` → 201 `reportId,evidenceId` | 제안 응답 필드명 유지. `reportId`는 제보 응답 ID, `evidenceId`는 소속 파일 ID. 원본 비공개 |
 | POST | /api/v1/cases | `eventId,type,reason`; GRAPH_CLUSTER는 `findingIds`, FAN_REPORT는 `fanReportIds`, COMBINED는 둘 다; 선택한 `evidenceIds`는 제보 소속. 후속이면 `relatedCaseId,relationReason` 쌍 | ANALYST/REVIEWER; 서버 tenant/event·소유 관계, 후속 Case는 독립 OPEN |
 | GET | /api/v1/cases | `eventId,status,page,pageSize` → `items,page,pageSize,hasNext` | 서버 범위와 필터 검사 |
 | GET | /api/v1/cases/{caseId} | `caseVersion,evidenceRevision,allowedActions,createdAt` 포함 Case | 현재 ReportVersion/종료 근거 조회 |
@@ -31,6 +31,8 @@
 | GET | /api/v1/report-versions/{reportVersionId} | ReportVersion 상세 | 봉인 내용과 상태 별개 |
 | POST | /api/v1/report-versions/{reportVersionId}/render | 현재 승인·근거·내용 digest와 Case/Report 기대 버전 → 202 RENDERING | 발급 역할·차단 해제 미결정, `BLOCKED_POLICY_AND_SECURITY` |
 | GET | /api/v1/report-versions/{reportVersionId}/download | 이미 공식 공개된 불변 PDF 동일 파일 | CLOSED에서도 인증·인가·접근 감사 후 재다운로드 |
+
+팬 제보 접수 API 초안의 `reportId`는 응답 필드명이고, Case의 `fanReportIds`는 영속 팬 제보 UUID 참조다. 향후 두 필드가 같은 제보 UUID를 가리킬 수는 있지만 Backend 기준 커밋에는 독립적인 팬 제보 UUID 영속 모델이 없어 현재 ID 동일성이나 매핑을 보장하지 않는다. 해당 모델 구현 전에는 클라이언트가 응답 `reportId`를 Case의 `fanReportIds`에 넣어 유효한 연결이라고 가정하지 않는다. 실제 Case 연결은 서버가 인증된 tenant/event 범위와 영속 제보·증거의 소속을 검증한 뒤 수행한다. 현행 `TicketAudit.id`는 `Long`이며 UUID로 직접 변환하지 않는다. 기존 감사 데이터와 신규 제보 UUID를 연결해야 한다면 명시적인 대응 관계와 이행 절차를 별도 구현한다. 이 설명은 신규 ID 발급 방식이나 DB 스키마를 확정하지 않는다.
 
 기존 `/api/v1/report-versions/{reportVersionId}/approve` 제안은 단일 Decision 경로로 대체하여 관리자 OpenAPI에서 제거한다. 승인 쓰기 경로 두 개를 함께 운영하지 않는다. 이전 경로는 미구현 제안이므로 코드 호환성을 검증했다고 주장하지 않으며, 소비자 fixture와 연결 PR을 기준으로 폐기 또는 명시적 오류·전환 순서를 승인한다. `GENERATED_REPORT`, `ISSUANCE_ABANDONED`, `NOT_APPLICABLE`, `NO_NEW_REPORT_AFTER_STALE`의 종료 조건은 04와 12를 따른다. 후자는 서버에 **미리 저장된** 검토 활동, 당시 REVIEWER 권한·현재 snapshot ID/hash/revision·증거 변경에 따른 STALE Decision을 검사하고 과거 PDF를 서버 이력으로 연결한다.
 
