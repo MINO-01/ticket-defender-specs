@@ -131,11 +131,11 @@ G0 소스 baseline 테스트→G1 API 계약 일치→G2 테넌트·권한 통�
 | F02 데이터 반입 | event, account/reservation ref, HMAC 토큰 1개+ | 형식/스코프/중복/크기 검증, atomic batch 기록 | batchId, ACCEPTED/REJECTED | 행별 오류 목록; 실패 batch는 실행 금지 |
 | F03 분석 생성 | batchId, algorithmVersion | idempotency 및 상태 예약, 권한 확인 | jobId, QUEUED | 중복은 같은 job 반환; 409 상태 충돌 |
 | F04 그래프 분석 | 고정된 입력 스냅샷 | tenant 제한 그래프, Louvain, 근거 산출 | clusterIds, risk 0~1 | timeout→RETRY_WAIT 또는 FAILED; empty cluster는 실제 COMPLETED 때만 |
-| F05 제보 | eventId, description, image | MIME/magic bytes/픽셀/악성파일/권한, SHA256, 안전 저장 | reportId, evidenceId | 413 크기 초과, 415 형식, 422 손상, 보관 실패 503 |
+| F05 제보 | eventId, description, image | MIME/magic bytes/픽셀/악성파일/권한, SHA256, 안전 저장 | fanReportId, evidenceId | 413 크기 초과, 415 형식, 422 손상, 보관 실패 503 |
 | F06 파싱 | evidenceId | 외부 VLM 사용권한 확인, 추출 nullable+상태, 교정 원본 보존 | extractionId, fields | UNREADABLE/ABSENT/UNKNOWN; 엔진 오류는 parse FAILED |
 | F07 대조 | extractionId, 허용 DB 범위 | 공연+일시+구역+열+좌석 후보 조회, 과도한 후보 제한 | MATCH_CANDIDATE/NO_MATCH/UNVERIFIABLE | 미권한은 403, 근거 없음은 UNVERIFIABLE |
-| F08 Case | findingIds, reportIds, 결합 사유 | tenant/event/reservation 동일성 검증, 증거 다대다 연결 | caseId, status | 병합은 자동이 아니라 검토; 충돌 409, 교차 tenant 404 |
-| F09 PDF | caseId, approval version | 승인된 immutable snapshot; 누락 점검; hash+버전 기록 | reportVersionId, download | 비승인 409, 권한 403, 파일 생성 실패 FAILED |
+| F08 Case | eventId, type, reason, findingIds 또는 fanReportIds, 소속 evidenceIds, 후속 사건이면 relatedCaseId/relationReason | 서버 tenant/event·제보와 파일의 소속 검증, 출처별 버전 연결, 자동 병합 금지 | 독립 caseId, OPEN, caseVersion | 팬 제보 ID와 증거 ID 혼동 금지; 충돌 409, 타 tenant/공연 404 |
+| F09 승인·PDF | caseId, 불변 EvidenceSnapshot ID/digest, ReportVersion 내용 revision/digest | ANALYST 자료 준비 → REVIEWER 요청 → 독립 APPROVER 단일 결정; ACTIVE 보류·현재 승인 적격성·발급 예약 검사 | ApprovalDecision, 공식 발급 시 ReportVersion/PDF | 자기 승인·STALE 근거·CLOSED 신규 발급 거절; 실패는 승인 반려로 기록하지 않음 |
 | F10 모니터 | filters, date range | Spring 서버측 filter+pagination, audit | 집계·작업목록 | timeout은 지표 오류로 분리, 정상 0과 구별 |
 
 ## 업무 규칙의 경계
@@ -143,6 +143,9 @@ G0 소스 baseline 테스트→G1 API 계약 일치→G2 테넌트·권한 통�
 - 신고 파싱은 '원본 캡처에 인쇄된 문자열'만 관찰 결과로 보존; 판매자·위법성은 추론하지 않는다.
 - 증거 수정 대신 새 extraction revision 생성; manual correction은 actor/time/reason 필요.
 - Case에는 동일 예매의 Track1 finding과 Track2 evidence를 복수 연결 가능; 중복 Case 자동 병합 금지.
+- `fanReportId`는 접수 건, `evidenceId`는 그 제보 소속 파일 증거다. `FAN_REPORT` 출처와 `EVIDENCE_ASSET` 출처를 구분하고 서버 저장 소속·tenant·공연을 확인한다. 종료·기각 사건에 중요한 새 근거가 생기면 원 Case를 재개하지 않고 연결된 새 `OPEN` Case를 만든다. 이 MVP 방향은 Backend PR #21의 **PROPOSED** 계약이며 Specs DEC-12는 승인 절차 확인 전 `PENDING`이다.
+- Case의 상태·배정·활동 변경에는 `caseVersion`, 승인 근거 변경에는 `evidenceRevision`, 보고서 내용에는 ReportVersion `revision`, 상태 잠금에는 ReportVersion `version`을 사용한다. 직접 `APPROVED_FOR_REPORT` 전이는 금지하고 APPROVER 결정의 결과로만 전이한다.
+- V2 증거 재검토 후 신규 보고서 없이 종료하려면 REVIEWER의 별도 `EVIDENCE_REVIEW_COMPLETED` 활동을 서버에 먼저 확정하고, 그 활동 ID와 현재 revision을 종료 명령에서 대조한다. 종료 사유와 신규 미발급 사유를 분리하며 과거 V1 결정·PDF는 이력으로 보존한다.
 - PDF에 표시되는 금액은 관찰된 가격과 고객사 확인 가격을 별도 필드로 취급.
 
 ## 대표 인수 사례
@@ -164,11 +167,12 @@ G0 소스 baseline 테스트→G1 API 계약 일치→G2 테넌트·권한 통�
 - TENANT_ADMIN: 자사 멤버십·정책·데이터 소스 구성.
 - ANALYST: 자사 반입/분석/군집 조회 및 사건 초안 작성.
 - REVIEWER: 자사 신고/증거 검토, 교정, 사건 상태 변경.
-- APPROVER: 검토 완료 사건의 PDF 발행 승인(자기 승인 제한은 정책 확정).
+- APPROVER: REVIEWER가 제출한 불변 근거·보고서의 독립 승인/반려 결정. 동일 사용자 자기 승인 금지. 공식 PDF 발급 권한은 별도 결정 대상.
 - AUDITOR: 자사 감사 이벤트·보고서 기록 읽기 전용.
 - REPORTER: 본인 신고 제출/제한된 접수 상태만; 내부 분석 원문 조회 불가.
 
 ## 권한 매트릭스
+아래 Case·Approval 행은 Backend PR #21 `c30f828`의 **MVP 제안**과 맞춘 공유 검토안이다. 문서 승인은 아직 `PROPOSED`이며, 이전 Specs의 TENANT_ADMIN 상태/초안 권한 및 APPROVER 초안 권한을 축소하는 최종 정책은 결정 로그에서 `PENDING`으로 추적한다. 서버 인증·공연 범위·상태 가드가 모든 허용 행에 추가된다.
 | 동작 | Admin | Analyst | Reviewer | Approver | Auditor | Reporter |
 |---|---|---|---|---|---|---|
 | 멤버십/역할 관리 | O | - | - | - | - | - |
@@ -177,14 +181,24 @@ G0 소스 baseline 테스트→G1 API 계약 일치→G2 테넌트·권한 통�
 | 그래프 후보 조회 | O | O | O | O | 읽기 | - |
 | 신고 접수 | O | - | O | - | - | 본인 |
 | 증거/추출 수정 | 정책 | - | 교정 신규버전 | - | 읽기 | - |
+| Case 목록·상세/출처 메타 | O | 담당 범위 | O | 승인 범위 | 제한 읽기 | - |
+| 증거 원본 파일 열람 | 정책 승인 범위 | 담당 범위 | O | 검토 대상 | 제한 읽기 | 본인 접수 범위 |
+| Case 생성·출처 연결 | - | O | O | - | - | - |
 | 사건 배정 | O | - | O | - | - | - |
-| 사건 검토 상태 | O | - | O | - | - | - |
-| 보고서 초안 생성 | O | - | O | O | - | - |
-| 보고서 승인/반려 | - | - | - | O | - | - |
+| 사건 검토 상태 | - | - | O | 결정 결과로만 | - | - |
+| 현재 증거 검토 완료 기록 | - | - | O(명시적 POST) | - | - | - |
+| 보고서 초안 생성 | - | - | O | - | - | - |
+| 승인 요청 제출/철회 | - | - | O(현재 권한·PENDING 가드) | - | - | - |
+| 보고서 승인/반려 | - | - | - | O(독립 사용자) | - | - |
+| 발급 보류 등록/해제 | - | - | 서버 업무 명령·근거 기록 | - | - | - |
+| 공식 PDF 신규 발급 | 보류 | 보류 | 보류 | 보류 | - | - |
 | PDF 다운로드 | O | 권한범위 | O | O | O | - |
-| 감사 기록 조회 | O | - | - | O(제한) | O | - |
+| CaseActivity 조회 | O | 담당 범위 | O | 관련 범위 | O | - |
+| ApprovalAuditEvent 조회 | O | - | - (본인 요청 결과는 자원 조회) | 관련 범위 | O | - |
 
 **권한은 역할만으로 판단하지 않는다.** 필수 조건 `authenticated && member(tenant) && role.allow(action) && resource.tenantId==activeTenant && state.guard && objectScope`. 이벤트/공연 단위 제한도 필요하면 추가.
+
+ANALYST는 자료와 출처를 준비할 수 있지만 단독으로 승인 요청을 제출하지 않는다. REVIEWER는 현재 snapshot과 봉인된 ReportVersion을 검토해 요청·철회를 수행하고, APPROVER는 별도 사용자 ID로만 결정한다. 동일 사용자가 두 역할을 갖더라도 자기 승인 금지는 해제되지 않는다. 검토 패키지 GET은 조회 전용이고 POST만 서버 `ReviewReceipt`를 발급한다. 원본 파일은 Case 메타데이터 조회 권한과 별도로 tenant/event·역할·객체 범위를 검사한다. TENANT_ADMIN의 예외 개입과 공식 발급 권한은 일반 API의 기본 허용으로 해석하지 않는다.
 
 ## 프론트와 API 적용
 - 화면 버튼 숨김/비활성화는 UX일 뿐 보안이 아니다. Spring 메서드 + 서비스 객체 단위에서 재검증.
@@ -204,8 +218,8 @@ IDOR 다른 tenant case/evidence/report; BFLA Reviewer가 승인 endpoint 호출
 ## 4계층 상태 모델 — 서로 합치지 말 것
 1. `ImportBatch`: RECEIVED → VALIDATING → ACCEPTED 또는 REJECTED; ACCEPTED → ARCHIVED.
 2. `AnalysisJob`: QUEUED → RUNNING → COMPLETED | RETRY_WAIT | FAILED | CANCELLED; RETRY_WAIT → QUEUED; FAILED → QUEUED(명시적 재실행, 새 attempt 기록). `COMPLETED`는 업무 승인 아님.
-3. `FraudCase`: OPEN → TRIAGED → IN_REVIEW → NEEDS_EVIDENCE | READY_FOR_APPROVAL | DISMISSED; NEEDS_EVIDENCE → IN_REVIEW; READY_FOR_APPROVAL → APPROVED_FOR_REPORT | IN_REVIEW; APPROVED_FOR_REPORT → CLOSED; DISMISSED → CLOSED. CLOSED 이후에는 `REOPEN`을 감사 사유 포함한 명시적 새 이벤트로만 허용.
-4. `ReportVersion`: DRAFT → PENDING_APPROVAL → APPROVED | REJECTED; APPROVED → RENDERING → GENERATED | GENERATION_FAILED; GENERATION_FAILED → RENDERING(버전/재시도 관리), GENERATED → SUPERSEDED(신규 버전 승인 시).
+3. `Case`(기존 `FraudCase` 목표 객체): OPEN → TRIAGED → IN_REVIEW → NEEDS_EVIDENCE | READY_FOR_APPROVAL | DISMISSED; NEEDS_EVIDENCE → IN_REVIEW; READY_FOR_APPROVAL → IN_REVIEW | NEEDS_EVIDENCE 또는 **APPROVER Decision 결과로만** APPROVED_FOR_REPORT; APPROVED_FOR_REPORT → CLOSED 또는 관련 근거·보고서 내용 변경에 따른 IN_REVIEW; IN_REVIEW → CLOSED는 V2 증거 재검토 후 별도 사전 활동이 확인된 `NO_NEW_REPORT_AFTER_STALE`에 한정; DISMISSED → CLOSED. DISMISSED/CLOSED 직접 `REOPEN`은 MVP 제안에서 제외하고 새 근거는 연결된 후속 OPEN Case로 만든다. Specs DEC-12는 `PENDING`이다.
+4. `ApprovalRequest`: PENDING → APPROVED | REJECTED | WITHDRAWN | INVALIDATED. 승인/반려는 별도 불변 `ApprovalDecision`으로 기록하며 결정당 하나의 Request와 서버 `ReviewReceipt`를 묶는다. `ReportVersion`: DRAFT → PENDING_APPROVAL → APPROVED | REJECTED | WITHDRAWN | INVALIDATED; APPROVED → RENDERING → GENERATED | GENERATION_FAILED 또는 공개 차단 시 APPROVED 복귀; GENERATION_FAILED → RENDERING(동일 봉인 입력·미종료 Case·현재 승인 재검사), GENERATED → SUPERSEDED(새 공식 PDF 공개 성공 시에만).
 
 Track2 `ExtractionRun`: QUEUED → RUNNING → COMPLETED | FAILED; 각 **필드**의 상태는 `VISIBLE | ABSENT | UNREADABLE | AMBIGUOUS`, fieldValue는 뒤의 세 상태에서 기본적으로 null. 이미지 진위와 판매자 특정은 별도 판정 불가.
 
@@ -230,8 +244,13 @@ S->>M: 결과 저장, job COMPLETED
 U->>S: GET analysis-jobs/{id}
 S-->>U: COMPLETED + findings
 U->>S: 사건 생성 및 검토
-U->>S: 승인된 사건 PDF 요청
-S->>M: 승인·증거 snapshot 확인
+U->>S: REVIEWER 승인 요청 제출
+S->>M: 불변 EvidenceSnapshot·ReportVersion 봉인
+U->>S: APPROVER 검토 패키지 조회 및 명시적 영수증 발급
+U->>S: 독립 승인/반려 결정
+S->>M: 영수증 소비·Decision·감사 원자 기록
+U->>S: 공식 PDF 발급 요청(별도 활성화 전 차단)
+S->>M: 현재 승인·보류·revision 및 예약 재검사
 S-->>U: report version / status
 ```
 
@@ -246,7 +265,9 @@ S-->>U: report version / status
 | Job FAILED | 오류/요청ID | 재시도(권한·횟수) | 결과 승인 |
 | Job COMPLETED | 분석 결과·버전 | 결과 보기/사건 연결 | 동일 작업 상태 재수정 |
 | Case IN_REVIEW | 증거·검토 | 교정/추가자료/보류/승인요청 | PDF 최종 생성 |
-| Case READY_FOR_APPROVAL | 검토 종료·필수항목 | 승인/반려(Approver) | 무근거 수정 |
+| Case READY_FOR_APPROVAL | 현재 snapshot·봉인된 초안·PENDING 여부 | REVIEWER 요청 제출/철회, APPROVER 검토 패키지·결정, PENDING이 없으면 REVIEWER 검토 복귀 | Case 전이 API로 직접 APPROVED_FOR_REPORT 설정 또는 PENDING 우회 복귀 |
+| Case APPROVED_FOR_REPORT | 승인 바인딩·발급 보류·현재 적격성 | 허용된 공식 발급 예약 또는 사유를 남긴 종료 | ACTIVE 보류·STALE 근거로 신규 발급 |
+| Case CLOSED | closureDisposition·과거 보고서 | 권한별 기존 PDF 동일 파일 재다운로드 | 신규 렌더·실패 재시도·직접 REOPEN |
 | Report GENERATED | 버전·SHA256 | 권한별 내려받기 | 파일 덮어쓰기 |
 
 ## 예외 흐름
@@ -254,8 +275,20 @@ S-->>U: report version / status
 - 분석 실패: Job FAILED/RETRY_WAIT; 기존 Case와 무관하며 기존 증거를 지우지 않음.
 - 두 트랙 동일 reservation: 하나의 Case에 `case_finding` 다대다 첨부; 자동 병합하지 않고 담당자 확인.
 - 같은 이미지 반복: 파일 SHA 중복 힌트를 제공하되 새 신고를 단순 폐기하지 않음.
-- 보고서 발행 뒤 새로운 증거: 기존 GENERATED 불변; 신규 version 생성·승인.
-- 상태변경 동시성: `version`/If-Match 체크 후 409 충돌 안내.
+- 보고서 발행 뒤 새로운 증거: 기존 GENERATED·Decision은 불변. 현재 `approvalEligibility=STALE`로 만들고 새 EvidenceSnapshot·ReportVersion 내용 revision·승인 절차를 거친다. 신규 PDF가 공식 공개되기 전에는 이전 GENERATED를 SUPERSEDED로 바꾸지 않는다.
+- 상태변경 동시성: Case `caseVersion`/명령 `expectedCaseVersion` 체크 후 409 충돌 안내. Evidence Revision과 ReportVersion 내용 revision/상태 잠금 version은 별개다.
+- 중요·반대 정보 관련성 평가 전에도 `IssuanceHold.ACTIVE`를 서버에 지속 기록해 새 승인 결정·발급 예약·공개를 막는다. 관련성이 확인되면 근거 revision과 적격성을 갱신하고 해제하며, 무관성이 확인되면 근거·감사를 남기고 해제한다.
+
+## Case 종료 분기와 사전 검토 활동 (Backend PR #21과 동기화한 PROPOSED MVP)
+
+| 출발 상태 | closureDisposition | 필수 검증 및 기록 |
+|---|---|---|
+| APPROVED_FOR_REPORT | GENERATED_REPORT | 현재 승인 바인딩의 ReportVersion PDF가 공식 `GENERATED`, `closureReportVersionId` 일치. 종료 사유 기록. |
+| APPROVED_FOR_REPORT | ISSUANCE_ABANDONED | 현재 버전 미발급·미예약, 별도 `issuanceAbandonmentReason`과 종료 사유, 포기·종료 감사 원자 기록. 발급 완료가 아님. |
+| DISMISSED | NOT_APPLICABLE | 근거 있는 조사상 기각. STALE 또는 발급 포기만으로 기각 금지. |
+| IN_REVIEW | NO_NEW_REPORT_AFTER_STALE | 증거 V2 반영으로 이전 승인 적격성이 STALE이고 현재 증거 revision이 승인 snapshot보다 큼. REVIEWER가 종료 **전에** 별도 `POST /api/v1/cases/{caseId}/evidence-review-completions`에서 현재 revision·snapshot ID/manifest digest·`NO_NEW_REPORT`·사유를 묶어 `EVIDENCE_REVIEW_COMPLETED` CaseActivity를 확정. 종료 명령은 그 `reviewActivityId`, `reviewedEvidenceRevision`, 공통 종료 사유, 별도 `noNewReportReason`을 요구. |
+
+검토 완료 명령은 `expectedCaseVersion`과 멱등성 키를 요구하며, 저장된 REVIEWER actor·서버 시각·tenant/event/Case·현재 snapshot ID/hash/revision을 고정하고 Case 버전을 증가시킨다. GET·운영 메모·종료 명령은 이 활동을 만들지 않는다. 종료 서버는 당시 REVIEWER 권한과 `reviewOutcome`, V3 변경 여부, 과거 STALE Decision, ACTIVE 보류·PENDING 요청·렌더 예약 부재를 같은 직렬화 경계에서 다시 확인한다. ReportVersion 본문 변경만으로 STALE인 경우는 이 종료 분기가 아니다. 미존재·타 범위 활동 ID는 404, 잘못된 활동 유형 또는 바인딩 불일치는 409. 종료 활동·ApprovalAuditEvent·상태/버전은 원자 기록하고 과거 V1 PDF ID는 서버 이력에서 연결한다. V1 파일은 통제된 재다운로드만 가능하며 V2 신규 발급 근거가 아니다. 모든 CLOSED 분기에서 ACTIVE 보류와 렌더 예약을 거절한다.
 
 
 ---
@@ -348,6 +381,7 @@ erDiagram
 ```
 
 ## SQL 데이터 사전 (권장 MySQL 타입)
+아래 `fraud_cases`·`case_decisions`·`report_versions` 행은 초기 목표 스케치다. Backend PR #21의 Case·Approval 제안에 필요한 영속 객체·버전 경계를 모두 표현하지 못하므로 이 행만으로 DDL을 확정하지 않는다. 기존 `version` 물리 컬럼의 API 투영이나 `case_decisions`의 전환/승인 분할은 실제 엔티티·migration 비교와 공유 승인 후 정한다.
 기본 공통 칼럼: `id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PK`, `tenant_id CHAR(36)` (tenant 소유 엔티티), `created_at DATETIME(6) UTC`, `updated_at DATETIME(6) UTC`, `version BIGINT NOT NULL DEFAULT 0` (낙관적 락). 보존 기한·삭제상태 별도.
 
 | Table | 주요 칼럼·타입 | FK / UNIQUE / CHECK | 소유자 |
@@ -368,9 +402,20 @@ erDiagram
 | fraud_cases | tenant_id,event_id,type VARCHAR(24),status VARCHAR(32),assignee_user_id nullable,summary TEXT,version BIGINT | FK tenant,event, assignee in tenant | Spring |
 | case_findings | tenant_id,case_id,finding_id | UNIQUE(case_id,finding_id) | Spring |
 | case_evidence | tenant_id,case_id,asset_id,extraction_id nullable | UNIQUE(case_id,asset_id,extraction_id) nullable 주의 | Spring |
-| case_decisions | tenant_id,case_id,actor_id,from_state VARCHAR(32),to_state VARCHAR(32),reason TEXT,created_at | UPDATE/DELETE 제한 | Spring |
-| report_versions | tenant_id,case_id,revision INT,status VARCHAR(32),snapshot_json JSON,object_key VARCHAR(512),sha256 CHAR(64),approved_by nullable,approved_at nullable | UNIQUE(case_id,revision) | Spring |
+| case_decisions | tenant_id,case_id,actor_id,from_state VARCHAR(32),to_state VARCHAR(32),reason TEXT,created_at | UPDATE/DELETE 제한; 초기 스케치의 상태 이력이며 신규 ApprovalDecision을 대신하지 않음 | Spring |
+| report_versions | tenant_id,case_id,revision INT,status VARCHAR(32),snapshot_json JSON,object_key VARCHAR(512),sha256 CHAR(64),approved_by nullable,approved_at nullable | UNIQUE(case_id,revision); `approved_by`는 초기 스케치이며 단독 승인 기록으로 구현 금지 | Spring |
 | audit_events | tenant_id,actor_id nullable,action VARCHAR(90),resource_type VARCHAR(50),resource_id CHAR(36),request_id CHAR(36),occurred_at,metadata_json JSON | append-only, 보존 정책 | Spring |
+
+### Case·Approval 논리 관계 보완 제안 (DDL 미확정)
+
+| 논리 객체 | 필요한 관계·불변식 |
+|---|---|
+| Case / CaseSourceReference / CaseActivity | Case는 tenant·event 소유와 독립 `caseId`를 가진다. `caseVersion`은 상태·배정·활동의 동시성 버전, `evidenceRevision`은 승인 근거 버전이다. 출처 연결은 제보 `fanReportId`, 그 제보 소속 파일 `evidenceId`, 분석 `(tenantId, analysisRunId, clusterId)`를 구분한다. 후속 Case는 종료 원 Case와 연결하되 승인·PDF를 승계하지 않는다. 활동은 append-only이며 `EVIDENCE_REVIEW_COMPLETED`의 `activityId`가 종료 명령의 `reviewActivityId`다. |
+| EvidenceSnapshot / EvidenceItem | Case의 특정 `evidenceRevision`에 대한 불변 manifest ID·digest·항목 버전. 제보 파일 항목은 `evidenceId`와 소속 `fanReportId`를 함께 고정한다. 현재 snapshot 조회와 과거 snapshot 이력을 분리한다. |
+| ReportVersion / ApprovalRequest / ApprovalDecision / ReviewReceipt | ReportVersion 내용 `revision`과 상태 lock `version`은 분리한다. 봉인된 내용 digest·템플릿과 snapshot ID/hash에 Request를 묶고 Request당 Decision은 최대 1건. 영수증의 서버 ID와 비밀 토큰 digest를 분리해 결정 시 1회 소비한다. 한 Case의 현재 발급 대상 PENDING 요청은 최대 1건이다. |
+| IssuanceHold / ApprovalAuditEvent | 중요 정보 관련성 판단 전에도 `ACTIVE` 보류를 서버 저장한다. 해제는 사유·주체·시각·근거 revision·감사를 남긴다. 종료·승인·발급 게이트는 활성 보류를 같은 직렬화 경계에서 검사한다. 승인 감사는 업무 CaseActivity와 분리된 append-only 이력이며 둘을 ID로 연결한다. |
+
+물리 테이블, FK/고유성 제약, nullable UNIQUE 처리, 기존 `TicketAudit`·`analysisRequestId`·이미지 URL의 이행표는 TD-07 및 관련 구현 작업에서 결정한다. `tenantId`는 인증된 서버 문맥에서 결정하고 모든 관계의 tenant/event·제보/증거 소속을 서버와 저장소 제약으로 확인한다. 이 논리 모델은 Backend PR #21 `c30f828`의 **PROPOSED·미구현** 설계이며 기존 데이터 마이그레이션이나 새 DB 컬럼의 승인 기록이 아니다.
 
 ## 테넌트 강제 전략
 1. 모든 tenant 소유 테이블에 tenant_id + 조회 인덱스. FK 구조에서도 tenant 유효성 검사 (가능하면 composite FK `(tenant_id,id)`; 앱 layer 검사만으로 끝내지 않음).
@@ -401,28 +446,39 @@ erDiagram
 
 > Spring의 기존 외부 진입점 `/api/v1/audits/analyze`와 Spring → FastAPI 내부 호출 URL, 아래 목표 관리자 API URL은 서로 다른 인터페이스다. 계약 승인과 실제 구현·검증 상태는 [계약 레지스트리](contracts/registry.yaml)에서 별도로 추적한다.
 
-## 관리자 API — Spring (모두 인증 필요)
-| Method | Path | Request | 2xx | 역할 | 주의 |
-|---|---|---|---|---|---|
-| POST | /api/v1/import-batches | eventId, sourceId, tickets[], idempotency | 202 batchId/status | Admin/Analyst | 422 형식, 409 중복키 충돌 |
-| GET | /api/v1/import-batches/{id} | - | 200 batch/status/errors | Admin/Analyst | tenant scope |
-| POST | /api/v1/analysis-jobs | batchId, algorithm=LOUVAIN | 202 jobId,QUEUED | Admin/Analyst | 409 상태충돌 |
-| GET | /api/v1/analysis-jobs/{id} | - | 200 status/attempt/errors | team read | 실패 ≠ 완료 0건 |
-| POST | /api/v1/analysis-jobs/{id}/retry | reason | 202 jobId/status | Admin/Analyst | FAILED/RETRY_WAIT만 |
-| GET | /api/v1/findings | eventId, pagination | 200 page/items | analysts+ | risk는 확률 아님 |
-| GET | /api/v1/findings/{id} | - | 200 members/signals | analysts+ | evidence source |
-| POST | /api/v1/fan-reports | multipart image/eventId/description | 201 reportId,evidenceId | Reporter/Reviewer | 413/415/422 |
-| GET | /api/v1/fan-reports/{id} | - | 200 report/extraction | Reviewer/본인 제한 | raw image URL 비공개 |
-| POST | /api/v1/fan-reports/{id}/extractions | mode | 202 extractionRunId | Reviewer | provider permission |
-| POST | /api/v1/extractions/{id}/corrections | fields + reason, If-Match | 201 revision | Reviewer | 원본 overwrite 금지 |
-| POST | /api/v1/cases | eventId,type,findingIds,evidenceIds | 201 caseId,OPEN | Analyst/Reviewer | 자동 병합 금지 |
-| GET | /api/v1/cases | query/page | 200 items | member authorized | tenant scope |
-| GET | /api/v1/cases/{id} | - | 200 status/evidence/permissions | member authorized | 허용 actions 제공 |
-| POST | /api/v1/cases/{id}/transitions | toStatus,reason,expectedVersion | 200 status/version | Reviewer/Approver | 상태가드+409 |
-| POST | /api/v1/cases/{id}/report-versions | evidence snapshot | 201 reportVersionId | Reviewer | 승인 전 DRAFT |
-| POST | /api/v1/report-versions/{id}/approve | decision,reason,expectedVersion | 200 APPROVED | Approver | 자기승인 정책 결정 |
-| POST | /api/v1/report-versions/{id}/render | - | 202 RENDERING | Approver | 승인 필요 |
-| GET | /api/v1/report-versions/{id}/download | - | 200 signed URL/stream | allowed | audit 생성 |
+## 관리자 API — Spring (인증·공연 범위 선행, 모두 PROPOSED)
+
+아래 중 Case·Approval·ReportVersion 경로의 필드·상태·오류는 [Specs 관리자 OpenAPI](contracts/admin-api-v1-proposal.yaml)를 공유 검토용 단일 초안으로 사용한다. 이 부분은 [Backend PR #21의 지정 커밋](https://github.com/MINO-01/ticket-defender-backend/blob/c30f8282e8754b78961faaa13c987b520fd7bfd5/docs/api/case-approval-v1-proposal.yaml)과 겹치는 경로를 맞춘 것이다. 문서 동기화는 API 구현·승인이 아니며 기존 `/api/v1/audits/**`는 별도 현행 인터페이스다. `{id}` 축약은 아래 표에 쓰지 않는다.
+
+| Method | Path | 핵심 요청/응답·권한 | 가드 |
+|---|---|---|---|
+| POST | /api/v1/analysis-jobs | `batchId,algorithm` → 202 AnalysisJob | 기존 관리자 초안; Idempotency-Key |
+| GET/POST | /api/v1/analysis-jobs/{jobId}, /api/v1/analysis-jobs/{jobId}/retry | 기술 작업 조회/재시도 | 실패 ≠ 완료 0건 |
+| POST | /api/v1/fan-reports | multipart `eventId,image` → 201 `reportId,evidenceId` | 기존 응답 필드 유지. `reportId` 값은 Case의 `fanReportIds`에 사용하는 제보 ID이며 `evidenceId`는 소속 파일 ID. 원본 비공개 |
+| POST | /api/v1/cases | `eventId,type,reason`; GRAPH_CLUSTER는 `findingIds`, FAN_REPORT는 `fanReportIds`, COMBINED는 둘 다; 선택한 `evidenceIds`는 제보 소속. 후속이면 `relatedCaseId,relationReason` 쌍 | ANALYST/REVIEWER; 서버 tenant/event·소유 관계, 후속 Case는 독립 OPEN |
+| GET | /api/v1/cases | `eventId,status,page,pageSize` → `items,page,pageSize,hasNext` | 서버 범위와 필터 검사 |
+| GET | /api/v1/cases/{caseId} | `caseVersion,evidenceRevision,allowedActions,createdAt` 포함 Case | 현재 ReportVersion/종료 근거 조회 |
+| GET | /api/v1/cases/{caseId}/sources | 출처·증거 항목 및 현재 snapshot이 있으면 ID/digest | 조회는 검토 완료 활동이 아님 |
+| GET | /api/v1/cases/{caseId}/activities | append-only CaseActivity 목록 | 업무 활동과 승인 감사 구분 |
+| GET | /api/v1/cases/{caseId}/evidence-snapshots/{evidenceSnapshotId} | 불변 manifest 메타데이터 | 원본 bytes/object key 미노출 |
+| POST | /api/v1/cases/{caseId}/evidence-review-completions | REVIEWER `expectedCaseVersion,evidenceRevision,evidenceSnapshotId,manifestSha256,reviewOutcome=NO_NEW_REPORT,reason` → 201 `EVIDENCE_REVIEW_COMPLETED` 활동 | Idempotency-Key 필수; 종료 전에 서버 확정, Case 버전 증가 |
+| POST | /api/v1/cases/{caseId}/transitions | REVIEWER `toStatus,expectedCaseVersion,reason`; CLOSED는 조건부 `closureDisposition`·분기별 필드 → Case | 직접 APPROVED_FOR_REPORT·REOPEN 금지; STALE 후 신규 미발급 종료에는 사전 `reviewActivityId,reviewedEvidenceRevision,noNewReportReason` 필수 |
+| PUT | /api/v1/cases/{caseId}/assignee | 담당자·사유·`expectedCaseVersion` | 배정 변경은 승인 근거 revision 증가와 별개 |
+| POST | /api/v1/cases/{caseId}/report-versions | REVIEWER가 현재 snapshot의 봉인 DRAFT 생성 → ReportVersion | 내용 `revision`과 상태 lock `version` 구분 |
+| GET/POST | /api/v1/cases/{caseId}/approval-requests | 현재 요청 조회 / REVIEWER가 봉인 대상 제출 | 새 Request에 ReportVersion revision·내용 digest·snapshot ID/hash 고정 |
+| GET | /api/v1/approval-requests/{approvalRequestId} | Request·Decision 상세 | 범위 검사 |
+| GET/POST | /api/v1/approval-requests/{approvalRequestId}/review-package | APPROVER GET은 조회만, POST는 서버 ReviewReceipt와 일회용 토큰 발급 | GET은 영수증 생성·폐기 없음; POST 응답 `no-store` |
+| POST | /api/v1/approval-requests/{approvalRequestId}/decision | APPROVER 단일 결정: `decision,reason`, 확인한 snapshot/hash·보고서 digest, 영수증 토큰·`reviewConfirmed=true`, 세 자원 기대 버전 → DecisionResult | 요청자와 다른 사용자, 영수증 1회 소비·Decision·감사 원자 처리 |
+| POST | /api/v1/approval-requests/{approvalRequestId}/withdraw | REVIEWER의 PENDING 철회와 세 자원 기대 버전 → WithdrawalResult | 철회/무효화·반려 후 새 ReportVersion revision 필요 |
+| GET | /api/v1/report-versions/{reportVersionId} | ReportVersion 상세 | 봉인 내용과 상태 별개 |
+| POST | /api/v1/report-versions/{reportVersionId}/render | 현재 승인·근거·내용 digest와 Case/Report 기대 버전 → 202 RENDERING | 발급 역할·차단 해제 미결정, `BLOCKED_POLICY_AND_SECURITY` |
+| GET | /api/v1/report-versions/{reportVersionId}/download | 이미 공식 공개된 불변 PDF 동일 파일 | CLOSED에서도 인증·인가·접근 감사 후 재다운로드 |
+
+기존 `/api/v1/report-versions/{reportVersionId}/approve` 제안은 단일 Decision 경로로 대체하여 관리자 OpenAPI에서 제거한다. 승인 쓰기 경로 두 개를 함께 운영하지 않는다. 이전 경로는 미구현 제안이므로 코드 호환성을 검증했다고 주장하지 않으며, 소비자 fixture와 연결 PR을 기준으로 폐기 또는 명시적 오류·전환 순서를 승인한다. `GENERATED_REPORT`, `ISSUANCE_ABANDONED`, `NOT_APPLICABLE`, `NO_NEW_REPORT_AFTER_STALE`의 종료 조건은 04와 12를 따른다. 후자는 서버에 **미리 저장된** 검토 활동, 당시 REVIEWER 권한·현재 snapshot ID/hash/revision·증거 변경에 따른 STALE Decision을 검사하고 과거 PDF를 서버 이력으로 연결한다.
+
+반입·finding·추출·교정 및 제보 상세의 기존 07 목표 경로는 관리자 OpenAPI에 아직 수록되지 않은 **후속 설계 목록**이다. 해당 경로의 DTO·권한은 이 표나 현재 구현으로 확정하지 않는다.
+
+장기 운영 권장안은 공유 승인 후 Specs의 관리자 OpenAPI와 artifact SHA-256/Specs commit을 API 단일 기준으로 고정하고, Backend의 별도 설명용 YAML 및 Frontend 타입·fixture가 그 revision을 참조하게 하는 것이다. 연결된 각 저장소 PR에서 겹치는 경로의 필수 필드·enum·상태/오류·예제 차이를 자동 비교하고, 제공자 → 소비자 적용 순서·구버전 공존/명시적 오류·복귀 방식을 기록한다. 현재는 Backend PR #21과 Specs 모두 미승인 제안이므로 이 운영 방식 자체도 공유 승인 전 권장안이다.
 
 ## 내부 분석 API — Python v1 계약 (target)
 `POST /api/v1/clusters/analyze` : `{requestId: UUID, tickets: [{accountId,reservationNo,eventId,paymentHash?,addressHash?,deviceIdHash?,ipHash?}]}`. 최소 1 티켓, 각 티켓 최소 1 토큰, 64자리 lowercase HMAC hex. tenant context는 외부 사용자 입력이 아닌 인증된 내부 서비스 신뢰 범위. 최초 v1에서는 **한 요청에 단일 tenant만**, 그래프 DB도 단일 tenant 격리 조건 검증 전엔 demo-only.
@@ -452,8 +508,10 @@ erDiagram
 
 오류 공통 `{type,title,status,code,detail,requestId,violations?}` (`application/problem+json`). 민감 정보, 원본 토큰, 원본 이미지, stacktrace 응답 금지.
 
+Case·Approval의 409 세부 코드는 관리자 OpenAPI `x-error-catalog`를 따른다. 특히 `CASE_VERSION_CONFLICT`는 `expectedCaseVersion`, `EVIDENCE_VERSION_MISMATCH`는 현재 증거 revision, `EVIDENCE_REVIEW_NOT_COMPLETED`는 같은 Case의 다른 활동 유형, `EVIDENCE_REVIEW_MISMATCH`는 사전 검토 활동과 현재 snapshot/revision 불일치에 대응한다. 미존재·타 tenant/event/Case 활동 ID는 모두 404 `RESOURCE_NOT_FOUND`다. `ISSUANCE_HOLD_ACTIVE`, `REPORT_RENDER_IN_PROGRESS`, `REVIEW_RECEIPT_UNUSABLE`도 409이며 장애는 500/503으로 분리한다.
+
 ## API 설계 일관성 규칙
-모든 list는 cursor/pageSize 상한, createdAt UTC ISO8601, key는 camelCase, 단순 ID로 tenant 보안 미보장, `Idempotency-Key`와 expectedVersion/If-Match, webhook은 MVP 제외, 수정은 승인 및 증거 snapshot audit 기록. OpenAPI 계약 테스트는 Java DTO serialization, Pydantic model, backend frontend generated TS types에 동일 샘플 사용.
+목록은 각 경로의 page/pageSize 상한, 시각은 UTC ISO8601, key는 camelCase다. 단순 ID로 tenant 보안이 보장되지 않는다. Case 명령은 `expectedCaseVersion`, Request 명령은 `expectedRequestVersion`, ReportVersion 상태 잠금은 `expectedReportVersion`을 사용하며 내용 `revision`·`evidenceRevision`과 구분한다. 멱등성 키가 필요한 경로는 OpenAPI에 명시한다. Webhook은 MVP 제외. OpenAPI 계약 테스트에는 Java DTO serialization과 Backend/Frontend generated TS 타입의 동일 fixture를 사용한다. 새 Case API의 인증·tenant membership·공연 범위·비공개 파일 권한이 구현되기 전에는 활성화하지 않는다.
 
 
 ---
@@ -610,11 +668,17 @@ UI Mock Service Worker(MSW)로 Job RUNNING→FAILED/COMPLETED, Case version conf
 | prompt injection | VLM 결과 왜곡 | untrusted input, schema parse, tool authority 없음 | 캡처 내 지시 무시 |
 | 로그 PII 유출 | 개인정보 사고 | structured logging, redaction, 원본 payload 금지 | 로그 샘플 점검 |
 | 결과 변조 | 잘못된 보고 | append-only decision, SHA256 증거/보고서, versions | 무결성 재검증 |
+| 자기 승인·영수증 재사용 | 승인 무결성 훼손 | 인증된 요청자/결정자 ID 분리, POST 발급 ReviewReceipt의 토큰 digest·범위·기한·1회 소비, 결정·감사 원자 기록 | 다중 역할 자기 승인, GET 후 결정, 재사용·만료·범위 오용 거부 |
+| 근거 변경 중 PDF 공개 | 과거 승인으로 새 파일 발급 | EvidenceSnapshot/ReportVersion digest·revision 재검사, ACTIVE IssuanceHold와 단일 렌더 예약·종료를 직렬화 | V2·보류·CLOSED 경합 시 신규 발급 409, 기존 파일 이력 보존 |
 | worker 중복 실행 | 잘못된 상태/중복 | lease, attempt fencing, idempotency | 강제 종료 복구 |
 | supply chain | 취약 의존성 | SCA/SBOM, lockfiles, CI secret scan | PR 자동 검사 |
 
 ## 인증·세션/권한
 OIDC 또는 기업 SSO가 가능하다면 사용; MVP의 자체 로그인 구현 시 암호 Argon2id, 비밀번호 정책, 세션 회수, 안전 쿠키/CSRF 조건 필요. 프론트에서 bearer token을 localStorage에 장기 보관하는 설계는 지양. Spring Security의 인증 컨텍스트 → authorizedMembership(tenant) → resource guard. 운영자 break-glass는 2인 승인, TTL, audit, 별도 운영 정책.
+
+Case·Approval 제안 API에서는 인증된 tenant membership과 공연별 객체 범위를 Case, 출처, 팬 제보, 증거 원본, snapshot, Request/Decision/Receipt, ReportVersion/PDF까지 매번 검사한다. 클라이언트 `tenantId`·파일 ID·직접 URL을 권한 근거로 사용하지 않는다. 타 tenant 또는 존재를 숨겨야 할 공연 자원은 404, 같은 범위의 역할 부족은 403이다. Case 메타 조회와 원본 파일 열람은 별도 권한이다. 원본 object key·이미지 bytes·영수증 원문 토큰은 목록/감사/로그에 넣지 않는다. ReviewReceipt GET 조회와 POST 발급, V2 검토 완료 활동의 별도 POST는 서로 다른 서버 행위이며 단순 열람을 사람의 이해나 검토 완료 증명으로 표현하지 않는다.
+
+`EVIDENCE_REVIEW_COMPLETED` 활동은 서버가 당시 REVIEWER 권한·tenant/event/Case·현재 snapshot ID/hash/revision을 검증해 종료 **전에** append-only 저장한다. 종료에서는 기존 활동과 STALE Decision·과거 공식 PDF 참조를 재검사하고 CaseActivity·ApprovalAuditEvent·버전을 원자 기록한다. 감사 실패를 승인 거절·정상 빈 근거로 바꾸지 않는다. 저장된 `IssuanceHold.ACTIVE`는 중요 정보가 revision으로 정형화되기 전에도 새 결정·발급을 막고, 해제에는 관련성 판단·행위자·사유·시각·감사를 요구한다. 이 정책은 Backend PR #21과 동기화한 **PROPOSED·미구현** 요구사항이며 보유·파기·법적 보전과 공식 발급 권한은 별도 승인 대상이다.
 
 ## 키 관리
 - 연결 신호 HMAC은 고객사별/신호별 파생 키, `keyVersion`, rotation/migration plan.
@@ -649,6 +713,8 @@ OIDC 또는 기업 SSO가 가능하다면 사용; MVP의 자체 로그인 구현
 | GRAPH_FINDING | 공유 신호 군집 | runId/algorithmVersion/graphSnapshot/clusterId/memberRefs/riskScore/featureList |
 | DATABASE_MATCH | 예매 후보 검증 | queryScope/matchType/checkedAt/authorizedSource, 조회 사유 |
 | REVIEW_DECISION | 담당자 의견 | actor/time/reason/from/to/action/relatedEvidence |
+| EVIDENCE_REVIEW_COMPLETED | V2 검토 후 신규 미발급 판단 | 서버 저장 CaseActivity ID, REVIEWER/시각, 현재 evidenceRevision·snapshot ID/digest, NO_NEW_REPORT·사유 |
+| APPROVAL_DECISION | 독립 승인/반려 | Request·ReportVersion 내용·snapshot ID/hash, 결정자, 서버 ReviewReceipt ID, 사유·시각·감사 ID |
 
 ## 증거 생성·변경 불변 규칙
 1. 원본은 private object storage에 immutable version/retention control로 보관.
@@ -657,6 +723,16 @@ OIDC 또는 기업 SSO가 가능하다면 사용; MVP의 자체 로그인 구현
 4. 파일이 같은 증거 중복은 flag만 설정; 다른 제출/사건의 출처를 소거하지 않음.
 5. 증거를 사건에 연결할 때 tenant/event/reservation 범위 검증.
 6. 삭제·법적 보전(legal hold) 여부는 적법한 권한·기한·감사 규약으로 처리.
+
+`EvidenceSnapshot`은 선택된 원본 object version·bytes digest, 추출/교정·대조·분석 실행/알고리즘·출처/판단 revision을 안정된 순서의 불변 manifest로 묶는다. `manifestSha256`은 그 digest 필드를 제외한 canonical JSON bytes로 계산한다. 팬 제보는 `fanReportId`, 그 제보 소속 파일은 `evidenceId`와 `fanReportId`를 함께 보존한다. 서버가 저장된 소속과 tenant/event를 확인하며 다른 제보 파일 ID를 연결하지 않는다. SHA-256은 무결성 검사이지 익명화·진정성·법적 증거력 보증이 아니다.
+
+Case의 `evidenceRevision`은 채택한 원본·추출/교정·대조·분석 실행·출처 연결·조사 판단 등 승인 근거의 실질 변경 때 증가한다. 단순 배정·운영 메모는 `caseVersion`만 바꾼다. 보고서 본문·템플릿은 Evidence Revision과 별도인 ReportVersion 내용 `revision`, `contentSha256`, `templateVersion`으로 봉인하고, 상태 잠금 `version`도 구분한다. 과거 snapshot·ReportVersion·Decision은 덮어쓰지 않는다. READY_FOR_APPROVAL 전이와 snapshot 고정은 원자 처리하며 `caseVersionAtCapture`는 전이 후 값이다.
+
+## 발급 보류와 승인 적격성
+
+중요·반대 정보가 아직 근거 revision으로 정형화되지 않아도 서버는 `IssuanceHold.ACTIVE`를 사유·주체·시각·당시 revision·감사 ID와 함께 지속 저장한다. ACTIVE 보류가 하나라도 있으면 새 승인 결정·렌더 예약·공식 공개를 차단하고 미소비 검토 영수증을 폐기한다. 관련성이 확인되면 새 revision/snapshot을 고정하고 PENDING 요청을 `INVALIDATED` 또는 과거 승인 적격성을 `STALE`로 처리한 후 근거·감사와 함께 해제한다. 무관성이 확인되면 무관성 판단 근거·해제 사유·시각을 남기고 해제한다. 보류 자동 만료나 UI 플래그 해제는 허용하지 않는다. 등록·해제 공개 API 및 운영 역할·SLA는 별도 결정 대상이다.
+
+승인은 특정 EvidenceSnapshot ID/manifest digest와 ReportVersion ID/내용 revision/digest/템플릿에만 유효하다. `ApprovalRequest`는 REVIEWER가 제출하며 Case의 현재 발급 대상 PENDING은 최대 1건, Request당 Decision은 최대 1건이다. APPROVER는 요청자와 다른 인증 사용자여야 한다. GET 검토 패키지는 조회만 한다. 명시적 POST 검토 패키지는 같은 대상·승인자·tenant/event·Case·Request에 묶인 일회용 `ReviewReceipt`를 서버에 기록하고 비밀 토큰을 한 번 반환한다. 결정은 `reviewConfirmed=true`와 확인한 ID/hash·내용 digest·토큰을 다시 검증해 영수증 소비·Decision·Request/ReportVersion/Case·감사를 원자 기록한다. 토큰 원문은 서버 감사에 넣지 않으며, 영수증은 사람의 이해를 증명하지 않는다. TTL 15분은 Backend 초기 권장값이며 확정 운영 설정이 아니다. 반려·철회·시스템 무효화 뒤 새 제출에는 새 ReportVersion 내용 revision이 필요하다.
 
 ## PDF 내용 규격
 - Header: company, report ID/version, case ID, generatedAt UTC + 한국 표기, classification, approval.
@@ -669,15 +745,19 @@ OIDC 또는 기업 SSO가 가능하다면 사용; MVP의 자체 로그인 구현
 - Section 7: 후속 요청/승인 담당자, 보고서 검증 정보 (reportSha256은 PDF 외부 메타/조회페이지에 보존 가능; PDF 안에 자기 자신의 hash를 넣는 자기참조 설계는 피함).
 
 ## 버전·렌더 규칙
-1. Reviewer DRAFT → PENDING_APPROVAL 요청.
-2. Approver 승인 시 immutable evidence snapshot(JSON)과 정확한 참조버전 확정.
-3. Spring PDF 렌더러(기존 openhtmltopdf 사용 가능)로 템플릿 생성. 서명·직인은 고객사의 명시적 사용 권한이 확인된 경우에만.
-4. PDF 저장 및 SHA256 기록, GENERATED 후 변경 불가. 재발행은 revision +1.
-5. 다운로드는 role/tenant/approval 검증 → 짧은 signed URL(또는 stream) → AUDIT 기록.
-6. 실패 시 GENERATION_FAILED, 재시도는 기존 immutable snapshot 기준. 새 증거가 나타나면 신규 버전 승인.
+1. REVIEWER가 현재 EvidenceSnapshot에 묶인 불변 DRAFT ReportVersion을 만들고 승인 요청을 제출한다. APPROVER 결정은 `POST /api/v1/approval-requests/{approvalRequestId}/decision` 한 경로로만 기록한다. 과거 `/report-versions/{id}/approve` 제안은 독립 승인 명령으로 사용하지 않는다.
+2. 공식 PDF 발급은 Case `APPROVED_FOR_REPORT`, 현재 승인 바인딩·적격성, ACTIVE 보류 없음, 미종료 Case, 단일 렌더 예약을 확인해야 한다. 실제 발급 권한과 기존 `AuditReportService` 차단 해제는 별도 승인·구현 전제다.
+3. Spring 렌더러는 봉인된 입력만 사용한다. 후보 PDF를 비공개 저장하고 checksum을 계산한 뒤 짧은 최종화 트랜잭션에서 Case·승인·revision·보류·예약을 다시 검사해 `GENERATED` 참조와 hash·감사를 확정한다. 실패 후보는 다운로드 불가이며 정리 대상이다. 서명·직인은 고객사의 명시적 사용 권한이 확인된 경우에만 사용한다.
+4. 새 공식 PDF의 공개 성공과 같은 최종화에서만 이전 `GENERATED`를 `SUPERSEDED`로 바꾼다. 새 DRAFT, 승인, 현재 근거 `STALE`, 종료만으로 과거 PDF를 SUPERSEDED로 만들지 않는다. 이미 GENERATED된 파일을 덮어쓰거나 제자리 재렌더하지 않는다.
+5. 기존 PDF 다운로드는 권한 있는 tenant/event·역할·파일 접근을 재검증하고 감사한 뒤 **동일 저장 파일**을 stream/짧은 URL로 제공한다. CLOSED에서도 가능하지만 새 렌더·`GENERATION_FAILED` 재시도는 불가하다. V1 파일은 V2 신규 발급 근거가 아니다.
+6. 기술적 생성 실패는 `GENERATION_FAILED`로 구분한다. 동일 봉인 입력·현재 적격성으로만 제한 재시도하며, 새 증거·보고서 내용에는 새 snapshot/ReportVersion revision/Request/Decision이 필요하다. 렌더 중 보류·근거 변경·종료가 먼저 확정되면 공식 공개를 거절하고 `REPORT_PUBLICATION_BLOCKED`를 감사한다.
+
+## 종료와 과거 보고서
+
+`GENERATED_REPORT`는 현재 승인 보고서의 공식 PDF 공개, `ISSUANCE_ABANDONED`는 REVIEWER의 별도 포기 사유가 있는 미발급 종료, `NOT_APPLICABLE`은 근거 있는 기각이다. V1 승인 뒤 증거 V2로 과거 승인 적격성이 `STALE`이 되었고 REVIEWER가 신규 발급을 원하지 않는 경우에는 `NO_NEW_REPORT_AFTER_STALE`를 제안한다. 먼저 별도 `POST /api/v1/cases/{caseId}/evidence-review-completions`에서 현재 V2 revision·불변 snapshot ID/digest에 묶인 `EVIDENCE_REVIEW_COMPLETED` CaseActivity를 확정해야 한다. 종료 명령의 `reviewActivityId`, `reviewedEvidenceRevision`, 공통 종료 사유 및 별도 신규 미발급 사유를 서버 저장 기록과 대조하고 당시 REVIEWER 권한·tenant/event/Case·증거 변경에 따른 STALE Decision·ACTIVE 보류/PENDING 요청/렌더 예약 부재를 재확인한다. 과거 공식 PDF ID 목록은 서버가 이력에서 조회해 종료 활동·승인 감사에 연결한다. V1 결정/PDF는 불변으로 보존하고 V2 승인·발급 완료로 표시하지 않는다. 이 내용은 Backend PR #21과 동기화한 **PROPOSED·미구현** 정책이며 Specs DEC-09는 여전히 `PENDING`이다.
 
 ## PDF 생성 합격 테스트
-- 필수 근거 누락 상태 승인 거부, 독립 사용자 승인(정책), 한글 폰트·페이지 넘침·표 크기 검사.
+- 필수 근거 누락 상태 승인 거부, 독립 사용자 승인·영수증 재사용 차단, 한글 폰트·페이지 넘침·표 크기 검사.
 - 원본 이미지의 개인정보/바코드 안전 마스킹, 동일 입력의 보고서 snapshot 동일성, generated PDF checksum 저장.
 - 취소 또는 벌금 산정이 자동 진행되지 않음. 작성 담당자와 승인 담당자 audit 확인.
 - 출력한 그래프는 전체 원본 데이터가 아닌 case에 속한 가명 요약 및 설명으로 제한.
