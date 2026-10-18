@@ -27,6 +27,7 @@ erDiagram
 ```
 
 ## SQL 데이터 사전 (권장 MySQL 타입)
+아래 `fraud_cases`·`case_decisions`·`report_versions` 행은 초기 목표 스케치다. Backend PR #21의 Case·Approval 제안에 필요한 영속 객체·버전 경계를 모두 표현하지 못하므로 이 행만으로 DDL을 확정하지 않는다. 기존 `version` 물리 컬럼의 API 투영이나 `case_decisions`의 전환/승인 분할은 실제 엔티티·migration 비교와 공유 승인 후 정한다.
 기본 공통 칼럼: `id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PK`, `tenant_id CHAR(36)` (tenant 소유 엔티티), `created_at DATETIME(6) UTC`, `updated_at DATETIME(6) UTC`, `version BIGINT NOT NULL DEFAULT 0` (낙관적 락). 보존 기한·삭제상태 별도.
 
 | Table | 주요 칼럼·타입 | FK / UNIQUE / CHECK | 소유자 |
@@ -47,9 +48,20 @@ erDiagram
 | fraud_cases | tenant_id,event_id,type VARCHAR(24),status VARCHAR(32),assignee_user_id nullable,summary TEXT,version BIGINT | FK tenant,event, assignee in tenant | Spring |
 | case_findings | tenant_id,case_id,finding_id | UNIQUE(case_id,finding_id) | Spring |
 | case_evidence | tenant_id,case_id,asset_id,extraction_id nullable | UNIQUE(case_id,asset_id,extraction_id) nullable 주의 | Spring |
-| case_decisions | tenant_id,case_id,actor_id,from_state VARCHAR(32),to_state VARCHAR(32),reason TEXT,created_at | UPDATE/DELETE 제한 | Spring |
-| report_versions | tenant_id,case_id,revision INT,status VARCHAR(32),snapshot_json JSON,object_key VARCHAR(512),sha256 CHAR(64),approved_by nullable,approved_at nullable | UNIQUE(case_id,revision) | Spring |
+| case_decisions | tenant_id,case_id,actor_id,from_state VARCHAR(32),to_state VARCHAR(32),reason TEXT,created_at | UPDATE/DELETE 제한; 초기 스케치의 상태 이력이며 신규 ApprovalDecision을 대신하지 않음 | Spring |
+| report_versions | tenant_id,case_id,revision INT,status VARCHAR(32),snapshot_json JSON,object_key VARCHAR(512),sha256 CHAR(64),approved_by nullable,approved_at nullable | UNIQUE(case_id,revision); `approved_by`는 초기 스케치이며 단독 승인 기록으로 구현 금지 | Spring |
 | audit_events | tenant_id,actor_id nullable,action VARCHAR(90),resource_type VARCHAR(50),resource_id CHAR(36),request_id CHAR(36),occurred_at,metadata_json JSON | append-only, 보존 정책 | Spring |
+
+### Case·Approval 논리 관계 보완 제안 (DDL 미확정)
+
+| 논리 객체 | 필요한 관계·불변식 |
+|---|---|
+| Case / CaseSourceReference / CaseActivity | Case는 tenant·event 소유와 독립 `caseId`를 가진다. `caseVersion`은 상태·배정·활동의 동시성 버전, `evidenceRevision`은 승인 근거 버전이다. 출처 연결은 제보 `fanReportId`, 그 제보 소속 파일 `evidenceId`, 분석 `(tenantId, analysisRunId, clusterId)`를 구분한다. 후속 Case는 종료 원 Case와 연결하되 승인·PDF를 승계하지 않는다. 활동은 append-only이며 `EVIDENCE_REVIEW_COMPLETED`의 `activityId`가 종료 명령의 `reviewActivityId`다. |
+| EvidenceSnapshot / EvidenceItem | Case의 특정 `evidenceRevision`에 대한 불변 manifest ID·digest·항목 버전. 제보 파일 항목은 `evidenceId`와 소속 `fanReportId`를 함께 고정한다. 현재 snapshot 조회와 과거 snapshot 이력을 분리한다. |
+| ReportVersion / ApprovalRequest / ApprovalDecision / ReviewReceipt | ReportVersion 내용 `revision`과 상태 lock `version`은 분리한다. 봉인된 내용 digest·템플릿과 snapshot ID/hash에 Request를 묶고 Request당 Decision은 최대 1건. 영수증의 서버 ID와 비밀 토큰 digest를 분리해 결정 시 1회 소비한다. 한 Case의 현재 발급 대상 PENDING 요청은 최대 1건이다. |
+| IssuanceHold / ApprovalAuditEvent | 중요 정보 관련성 판단 전에도 `ACTIVE` 보류를 서버 저장한다. 해제는 사유·주체·시각·근거 revision·감사를 남긴다. 종료·승인·발급 게이트는 활성 보류를 같은 직렬화 경계에서 검사한다. 승인 감사는 업무 CaseActivity와 분리된 append-only 이력이며 둘을 ID로 연결한다. |
+
+물리 테이블, FK/고유성 제약, nullable UNIQUE 처리, 기존 `TicketAudit`·`analysisRequestId`·이미지 URL의 이행표는 TD-07 및 관련 구현 작업에서 결정한다. `tenantId`는 인증된 서버 문맥에서 결정하고 모든 관계의 tenant/event·제보/증거 소속을 서버와 저장소 제약으로 확인한다. 이 논리 모델은 Backend PR #21 `c30f828`의 **PROPOSED·미구현** 설계이며 기존 데이터 마이그레이션이나 새 DB 컬럼의 승인 기록이 아니다.
 
 ## 테넌트 강제 전략
 1. 모든 tenant 소유 테이블에 tenant_id + 조회 인덱스. FK 구조에서도 tenant 유효성 검사 (가능하면 composite FK `(tenant_id,id)`; 앱 layer 검사만으로 끝내지 않음).

@@ -25,7 +25,7 @@ contracts:
 
   - contractId: admin-api-v1
     artifactPath: contracts/admin-api-v1-proposal.yaml
-    artifactSha256: ce604d4fa4f3934b2c9cd3669fbc894b40a2dcc2674faf0ab58f17d48b3e775e
+    artifactSha256: acf1eeb368cbe7ffe60ac11523fa2eb226a84c5bd7b60f5ce8ac9e054b81f6ea
     contractVersion: "1.0.0"
     documentStatus: PROPOSED
     approval: {approvedBy: null, approvedAt: null, pr: null}
@@ -36,12 +36,20 @@ contracts:
       - repository: ticket-defender-frontend
         implementationStatus: NOT_STARTED
     observedCommit:
-      ticket-defender-backend: 8b4f756b78b911deb0462aa057971891e2b506a4
+      ticket-defender-backend: a0386ebc7ffa30d0a0c516f8cadd2c2a1749d5ec
       ticket-defender-frontend: null
     implementationCommit: null
     verificationCommit: null
     verificationScope: null
     compatibility: NOT_VERIFIED
-    currentState: "The target proposal describes only part of the planned admin API; existing Spring endpoints do not establish implementation of this proposal."
+    currentState: "The Case/Approval section is synchronized as a PROPOSED draft with Backend PR #21 at a0386ebc. No Case/Approval Java API was identified at that HEAD and existing audit report issuance remains disabled. Shared approval, frontend compatibility and implementation are not verified."
+    proposalSource:
+      repository: ticket-defender-backend
+      commit: a0386ebc7ffa30d0a0c516f8cadd2c2a1749d5ec
+      pr: https://github.com/MINO-01/ticket-defender-backend/pull/21
+      scope: "Case/Approval documents and OpenAPI proposal only"
+    breakingChangeCandidate: true
+    versionPlan: "Keep 1.0.0 as an unapproved proposal label; artifact SHA-256 distinguishes this revision. Choose an approved version and deprecation window only after DEC-08/09/12/13 and consumer review."
+    transitionPlan: "Compare frontend DTO/fixtures for caseVersion/expectedCaseVersion, fanReportId/evidenceId, closure dispositions, approval decision path and errors. Existing TicketAudit.id is Long; proposed persistent fan-report and evidence IDs are UUIDs, but the fan-report UUID model and mapping policy are not implemented. Legacy audit data needs an explicit correspondence and migration procedure before linking it to new report UUIDs. Validate authenticated tenant/event ownership and persistent report/evidence membership before Case links; never treat an old audit ID as a Case fanReportId without that correspondence. Decide old proposed /report-versions/{id}/approve retirement or explicit error, provider/consumer adoption order, version coexistence and rollback in linked PRs before approval. No implemented endpoint compatibility is claimed."
     relatedTd: [TD-07, TD-08, TD-09, TD-10, TD-12, TD-13, TD-14, TD-15]
-    relatedPrs: []
+    relatedPrs: [https://github.com/MINO-01/ticket-defender-backend/pull/21, https://github.com/MINO-01/ticket-defender-specs/pull/2]

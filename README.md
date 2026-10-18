@@ -33,6 +33,7 @@
 ## 인터페이스 계약
 - `contracts/track1-internal-v1-proposal.yaml`: Spring 기존 MacroAnalysisRequest/Response를 기준으로 Python에 구현할 목표 **내부 API**. 현재 Python은 다른 라우트/DTO/WCC → 아직 일치하지 않음.
 - `contracts/admin-api-v1-proposal.yaml`: Spring 신규 공용 관리 API 일부; 실제 구현 아님. DTO/권한/상태 전이 검토 및 코드 생성 기준.
+- Case·Approval 부분은 [Backend PR #21의 `c30f828` 제안](https://github.com/MINO-01/ticket-defender-backend/pull/21)과 겹치는 경로를 동기화한 **PROPOSED·미구현** 계약이다. `caseVersion`/`expectedCaseVersion`, 별도 검토 완료 활동, 단일 ApprovalDecision 경로, 발급 보류·종료 분기를 포함한다. Specs DEC-09·DEC-12 및 권한·발급 운영 결정은 아직 `PENDING`이며 공식 PDF 발급 차단이 해제된 것은 아니다.
 - `contracts/analysis-job.mmd`: 기술적 작업 상태도.
 - `contracts/case-workflow.mmd`: 담당자 사건 상태도.
 
