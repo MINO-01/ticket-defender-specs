@@ -25,7 +25,7 @@ contracts:
 
   - contractId: admin-api-v1
     artifactPath: contracts/admin-api-v1-proposal.yaml
-    artifactSha256: 2469e87cfd142f01fca0b599652ce0d58860e1b32b224d7c519d49c4255fcbbb
+    artifactSha256: acf1eeb368cbe7ffe60ac11523fa2eb226a84c5bd7b60f5ce8ac9e054b81f6ea
     contractVersion: "1.0.0"
     documentStatus: PROPOSED
     approval: {approvedBy: null, approvedAt: null, pr: null}
@@ -36,16 +36,16 @@ contracts:
       - repository: ticket-defender-frontend
         implementationStatus: NOT_STARTED
     observedCommit:
-      ticket-defender-backend: c30f8282e8754b78961faaa13c987b520fd7bfd5
+      ticket-defender-backend: a0386ebc7ffa30d0a0c516f8cadd2c2a1749d5ec
       ticket-defender-frontend: null
     implementationCommit: null
     verificationCommit: null
     verificationScope: null
     compatibility: NOT_VERIFIED
-    currentState: "The Case/Approval section is synchronized as a PROPOSED draft with Backend PR #21 at c30f8282. No Case/Approval Java API was identified at that HEAD and existing audit report issuance remains disabled. Shared approval, frontend compatibility and implementation are not verified."
+    currentState: "The Case/Approval section is synchronized as a PROPOSED draft with Backend PR #21 at a0386ebc. No Case/Approval Java API was identified at that HEAD and existing audit report issuance remains disabled. Shared approval, frontend compatibility and implementation are not verified."
     proposalSource:
       repository: ticket-defender-backend
-      commit: c30f8282e8754b78961faaa13c987b520fd7bfd5
+      commit: a0386ebc7ffa30d0a0c516f8cadd2c2a1749d5ec
       pr: https://github.com/MINO-01/ticket-defender-backend/pull/21
       scope: "Case/Approval documents and OpenAPI proposal only"
     breakingChangeCandidate: true
