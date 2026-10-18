@@ -1,6 +1,6 @@
 # 미결정 사항
 
-모든 항목은 `PENDING`이다. 아래 대안은 비교 대상이며 승인·구현 결정이 아니다. 결정 시 근거, 승인자, 일시, 관련 TD와 계약 revision을 기록한다.
+표의 공식 결정 상태는 모두 `PENDING`이다. 아래 대안은 비교 대상이다. 사용자가 선택한 MVP 방향은 별도 절에 기록하며, 공식 `APPROVED`나 구현 완료를 뜻하지 않는다. 공식 결정 시 근거, 승인자, 일시, 관련 TD와 계약 revision을 기록한다.
 
 | ID | 주제 | 검토할 대안 | 현재 상태 | 영향 TD |
 |---|---|---|---|---|
@@ -20,8 +20,18 @@
 | DEC-14 | 공식 PDF 발급 활성화·발급 보류 운영 | 별도 발급 역할·차단 해제·IssuanceHold 등록/해제 공개 API·SLA 승인 / 내부 서버 업무 명령 유지 | PENDING | TD-14, TD-SEC-01, TD-AUD-01 |
 | DEC-15 | ReviewReceipt 운영 기한·토큰 보존 | Backend 권장 15분 / 운영 설정 및 저장·폐기·감사 기간 결정 | PENDING | TD-14, TD-SEC-01 |
 
-## Backend PR #21 MVP 방향과 공유 승인 경계
+## 사용자 채택 MVP 방향과 공유 승인 경계
 
-[Backend PR #21의 지정 커밋](https://github.com/MINO-01/ticket-defender-backend/pull/21)은 사용자 검토 뒤 선택한 MVP 방향을 **Backend 제안 문서**에 반영했다. DEC-09에는 불변 EvidenceSnapshot·ReportVersion 내용에 묶인 단일 ApprovalDecision, 신규 공식 PDF 공개 성공 후에만 이전 GENERATED를 SUPERSEDED 처리, `ISSUANCE_ABANDONED` 및 증거 V2 재검토 뒤 `NO_NEW_REPORT_AFTER_STALE` 종료가 해당한다. 후자는 사전 확정 `EVIDENCE_REVIEW_COMPLETED` CaseActivity, 당시 REVIEWER 권한·현재 snapshot ID/hash/revision·증거 변경으로 STALE인 이전 Decision, 별도 미발급 사유와 과거 PDF 이력 확인을 전제로 한다. DEC-12에는 DISMISSED/CLOSED 직접 REOPEN 대신 원 Case를 참조하는 새 OPEN 후속 Case가 해당한다. 이 선택은 공유 Specs의 승인자·시각·근거 PR을 갖춘 `APPROVED` 기록이 아니므로 두 항목은 `PENDING`으로 유지한다.
+이번 작업 지시는 사용자가 앞선 ChatGPT 대화에서 권장 방향으로 진행하겠다고 응답했음을 전달한다. 이 지시를 선택된 MVP 방향의 근거로 기록한다. 원 대화의 승인자 식별 정보와 응답 시각은 확인되지 않았으며, [Specs PR #2](https://github.com/MINO-01/ticket-defender-specs/pull/2)는 아직 Draft다. [명세 관리 정책](spec-management.md)의 승인자·시각·근거 PR을 갖춘 공식 승인 기록이 완성되기 전까지 아래 항목의 상태는 `PENDING`이다. 계약 등록부의 `PROPOSED`와 구현 `NOT_STARTED`도 별도로 유지한다.
 
-DEC-08은 Backend의 17개 Case·Approval 경로를 공유 관리자 OpenAPI 초안에 포함하는 범위에 영향을 받는다. 이번 동기화는 제안 계약의 중복 경로를 맞춘 것이며 API 확장 승인이나 운영 활성화가 아니다. DEC-13은 기존 Specs 역할표와 Backend의 제한적 MVP 권한이 충돌해 별도 승인 필요하다. DEC-14/15 및 개인정보 보유·파기·legal hold도 후속 결정이다. 구 `/report-versions/{id}/approve` 제안 경로에서 단일 `/approval-requests/{id}/decision` 경로로 옮길 때는 실제 소비자 DTO·fixture, 구버전 공존 또는 명시적 오류, 제공자/소비자 적용 순서와 복귀 방식, 연결된 저장소별 PR을 승인 전 기록한다. 현재 두 경로 모두 Case·Approval 구현 근거가 없어 실제 서비스 호환성을 검증했다고 표시하지 않는다.
+| 결정 | 사용자가 선택한 MVP 범위 | 공식 승인 및 후속 운영 경계 |
+|---|---|---|
+| DEC-09 | 불변 EvidenceSnapshot과 ReportVersion 내용에 단일 ApprovalDecision을 결속한다. 새 PDF의 공식 공개가 성공한 뒤에만 이전 GENERATED PDF를 SUPERSEDED로 전환한다. 증거 변경 뒤 과거 승인을 새 발급에 재사용하지 않는다. | 공식 결정 메타데이터 기록 전 `PENDING`. 실제 발급 활성화는 DEC-14의 별도 결정이다. |
+| DEC-12 | CLOSED/DISMISSED Case의 직접 REOPEN을 금지한다. 중요한 새 근거에는 `relatedCaseId`와 연결 사유를 가진 독립 신규 OPEN Case를 생성한다. | 공식 결정 메타데이터 기록 전 `PENDING`. 원 Case의 승인·발급·감사 이력은 승계하지 않는다. |
+| DEC-13 | ANALYST는 자료와 증거를 준비하고, REVIEWER는 검토·초안·승인 요청을 맡으며, APPROVER는 독립 결정한다. 동일 사용자 자기 승인을 금지하고 TENANT_ADMIN에는 기본 승인 우회 권한을 부여하지 않는다. | 공식 결정 메타데이터 기록 전 `PENDING`. 관리자 예외 개입은 별도 결정이다. |
+| DEC-14 | 공식 PDF 발급 차단과 활성 IssuanceHold의 신규 발급 차단을 유지한다. | 발급 역할, 활성화 조건, 운영 SLA, 구체적 보류 등록·해제 권한과 절차는 미결정이다. 전체 결정은 `PENDING`이다. |
+| DEC-15 | 서버 발급 범위 고정 일회용 ReviewReceipt를 사용한다. 서버에는 토큰 digest만 저장하고 소비·결정·감사를 원자 처리한다. | 15분은 초기 권장 TTL이며 운영 확정값이 아니다. TTL과 보유·파기 기간은 미결정이다. 전체 결정은 `PENDING`이다. |
+
+[Backend PR #21의 지정 커밋](https://github.com/MINO-01/ticket-defender-backend/pull/21)은 위 방향을 제안 계약에 반영했다. DEC-09의 증거 V2 재검토 후 `NO_NEW_REPORT_AFTER_STALE` 종료는 사전 저장된 `EVIDENCE_REVIEW_COMPLETED` CaseActivity, 당시 REVIEWER 권한, 현재 snapshot ID·digest·revision, STALE가 된 이전 Decision, 별도 미발급 사유 및 과거 PDF 이력 확인을 전제로 한다. `ISSUANCE_ABANDONED`는 별도 관리상 종료다.
+
+DEC-08은 Backend의 17개 Case·Approval 경로를 공유 관리자 OpenAPI 초안에 포함하는 범위에 영향을 받는다. 이번 동기화는 제안 계약의 중복 경로를 맞춘 것이며 API 확장 승인이나 운영 활성화가 아니다. 개인정보 보유·파기·legal hold도 후속 결정이다. 구 `/report-versions/{id}/approve` 제안 경로에서 단일 `/approval-requests/{id}/decision` 경로로 옮길 때는 실제 소비자 DTO·fixture, 구버전 공존 또는 명시적 오류, 제공자/소비자 적용 순서와 복귀 방식, 연결된 저장소별 PR을 기록한다. 현재 두 경로 모두 Case·Approval 구현 근거가 없어 실제 서비스 호환성을 검증했다고 표시하지 않는다.

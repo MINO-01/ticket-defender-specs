@@ -25,7 +25,7 @@ contracts:
 
   - contractId: admin-api-v1
     artifactPath: contracts/admin-api-v1-proposal.yaml
-    artifactSha256: 1a8e245e37d9decd615d2906180adf44ae431adf0991a6fcac1f29adf0e0fe8c
+    artifactSha256: 2469e87cfd142f01fca0b599652ce0d58860e1b32b224d7c519d49c4255fcbbb
     contractVersion: "1.0.0"
     documentStatus: PROPOSED
     approval: {approvedBy: null, approvedAt: null, pr: null}
@@ -52,4 +52,4 @@ contracts:
     versionPlan: "Keep 1.0.0 as an unapproved proposal label; artifact SHA-256 distinguishes this revision. Choose an approved version and deprecation window only after DEC-08/09/12/13 and consumer review."
     transitionPlan: "Compare frontend DTO/fixtures for caseVersion/expectedCaseVersion, fanReportId/evidenceId, closure dispositions, approval decision path and errors. Existing TicketAudit.id is Long; proposed persistent fan-report and evidence IDs are UUIDs, but the fan-report UUID model and mapping policy are not implemented. Legacy audit data needs an explicit correspondence and migration procedure before linking it to new report UUIDs. Validate authenticated tenant/event ownership and persistent report/evidence membership before Case links; never treat an old audit ID as a Case fanReportId without that correspondence. Decide old proposed /report-versions/{id}/approve retirement or explicit error, provider/consumer adoption order, version coexistence and rollback in linked PRs before approval. No implemented endpoint compatibility is claimed."
     relatedTd: [TD-07, TD-08, TD-09, TD-10, TD-12, TD-13, TD-14, TD-15]
-    relatedPrs: [https://github.com/MINO-01/ticket-defender-backend/pull/21]
+    relatedPrs: [https://github.com/MINO-01/ticket-defender-backend/pull/21, https://github.com/MINO-01/ticket-defender-specs/pull/2]

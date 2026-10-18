@@ -59,6 +59,7 @@ paths:
   /api/v1/analysis-jobs/{jobId}:
     get:
       operationId: getAnalysisJob
+      summary: Get analysis job status
       parameters: [{$ref: '#/components/parameters/JobId'}]
       responses:
         '200':
@@ -70,6 +71,7 @@ paths:
   /api/v1/analysis-jobs/{jobId}/retry:
     post:
       operationId: retryAnalysisJob
+      summary: Retry analysis job
       parameters: [{$ref: '#/components/parameters/JobId'}]
       requestBody:
         required: true
@@ -1106,7 +1108,7 @@ components:
         itemVersion: {type: integer, minimum: 1}
         itemSha256: {$ref: '#/components/schemas/Sha256'}
         sourceType: {type: string, enum: [ANALYSIS_FINDING, FAN_REPORT, EVIDENCE_ASSET]}
-        sourceRecordId: {type: string, format: uuid, description: FAN_REPORT는 fanReportId, EVIDENCE_ASSET은 evidenceId, ANALYSIS_FINDING은 findingId.}
+        sourceRecordId: {type: string, format: uuid, description: 'FAN_REPORT는 fanReportId, EVIDENCE_ASSET은 evidenceId, ANALYSIS_FINDING은 findingId.'}
         sourceVersion: {type: integer, minimum: 1}
         evidenceId: {type: string, format: uuid, description: 영속 증거 항목 ID. EVIDENCE_ASSET이면 sourceRecordId와 동일.}
         fanReportId: {type: string, format: uuid, description: FAN_REPORT 및 소속 EVIDENCE_ASSET의 영속 제보 ID.}
